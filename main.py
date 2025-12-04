@@ -222,8 +222,8 @@ async def root():
 # AUDIO ANALYSIS FUNCTIONS (Same as before)
 # ============================================================================
 
-def analyze_audio_file(audio_path: str) -> Dict:
-    y, sr = librosa.load(audio_path, sr=22050, duration=300)  # Max 5 minutes
+def analyze_audio_file(audio_path: str) -> Dict:s
+    y, sr = librosa.load(audio_path, sr=11025, duration=600)  # Max 10 minutes, faster processing
     duration = librosa.get_duration(y=y, sr=sr)
     
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
