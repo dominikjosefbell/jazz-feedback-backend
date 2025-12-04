@@ -1,7 +1,7 @@
-# Jazz Improvisation Feedback Platform - Backend with Web UI
-# FastAPI + Librosa + Embedded Test Interface
+# Jazz Improvisation Feedback Platform - Extended for Long Files
+# FastAPI + Librosa + Background Processing
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import librosa
@@ -11,6 +11,8 @@ import tempfile
 import os
 from typing import Dict, List, Optional
 import json
+import uuid
+from datetime import datetime
 
 app = FastAPI(title="Jazz Feedback API")
 
@@ -23,8 +25,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# In-Memory Storage für Analyse-Ergebnisse (in Production: Redis/Database)
+analysis_results = {}
+
 # ============================================================================
-# WEB UI - Eingebaute Test-Oberfläche
+# WEB UI - Erweitert mit Progress-Tracking
 # ============================================================================
 
 HTML_TEMPLATE = """
@@ -45,13 +50,13 @@ HTML_TEMPLATE = """
                 </svg>
             </div>
             <h1 class="text-4xl font-bold text-gray-900 mb-2">Jazz-Improvisation Feedback</h1>
-            <p class="text-gray-600">Professionelle Audio-Analyse mit Librosa</p>
+            <p class="text-gray-600">Professionelle Audio-Analyse mit Librosa - Jetzt auch für lange Dateien!</p>
         </div>
 
         <div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
             <div class="flex items-center gap-2">
                 <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span class="text-sm font-medium text-green-900">✅ Backend läuft!</span>
+                <span class="text-sm font-medium text-green-900">✅ Backend läuft! Unterstützt jetzt Dateien bis 5 Minuten</span>
             </div>
         </div>
 
@@ -62,7 +67,7 @@ HTML_TEMPLATE = """
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
                 <p class="text-lg font-semibold text-gray-700 mb-2" id="fileName">Audio-Datei hochladen</p>
-                <p class="text-sm text-gray-500">MP3, WAV, M4A</p>
+                <p class="text-sm text-gray-500">MP3, WAV, M4A - bis zu 5 Minuten</p>
             </div>
 
             <div id="audioPlayerContainer" class="mt-6 hidden">
@@ -75,9 +80,12 @@ HTML_TEMPLATE = """
         </div>
 
         <div id="loading" class="bg-white rounded-2xl shadow-lg p-6 mb-6 hidden">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 mb-3">
                 <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-                <span class="text-gray-700 font-medium">Analysiere mit Librosa...</span>
+                <span class="text-gray-700 font-medium" id="loadingText">Analysiere mit Librosa...</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div id="progressBar" class="bg-indigo-600 h-2 rounded-full transition-all" style="width: 0%"></div>
             </div>
         </div>
 
@@ -86,6 +94,7 @@ HTML_TEMPLATE = """
 
     <script>
         let selectedFile = null;
+        let analysisId = null;
 
         document.getElementById('dropzone').addEventListener('click', () => {
             document.getElementById('fileInput').click();
@@ -107,66 +116,84 @@ HTML_TEMPLATE = """
 
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('results').innerHTML = '';
+            document.getElementById('loadingText').textContent = 'Uploading...';
+            document.getElementById('progressBar').style.width = '10%';
 
             const formData = new FormData();
             formData.append('file', selectedFile);
 
             try {
-                const response = await fetch('/analyze', {
+                // Start analysis
+                const response = await fetch('/analyze-async', {
                     method: 'POST',
                     body: formData
                 });
 
-                const result = await response.json();
-                displayResults(result);
+                const data = await response.json();
+                analysisId = data.analysis_id;
+
+                document.getElementById('loadingText').textContent = 'Analysiere Audio mit Librosa...';
+                document.getElementById('progressBar').style.width = '30%';
+
+                // Poll for results
+                pollForResults(analysisId);
+
             } catch (error) {
-                alert('Fehler bei der Analyse: ' + error.message);
-            } finally {
+                alert('Fehler beim Upload: ' + error.message);
                 document.getElementById('loading').classList.add('hidden');
             }
         });
+
+        async function pollForResults(id) {
+            const maxAttempts = 60; // 60 * 2 = 120 seconds max
+            let attempts = 0;
+
+            const interval = setInterval(async () => {
+                attempts++;
+
+                try {
+                    const response = await fetch('/result/' + id);
+                    const data = await response.json();
+
+                    if (data.status === 'completed') {
+                        clearInterval(interval);
+                        document.getElementById('progressBar').style.width = '100%';
+                        setTimeout(() => {
+                            document.getElementById('loading').classList.add('hidden');
+                            displayResults(data.result);
+                        }, 500);
+                    } else if (data.status === 'processing') {
+                        const progress = 30 + (attempts / maxAttempts) * 60;
+                        document.getElementById('progressBar').style.width = progress + '%';
+                    } else if (data.status === 'error') {
+                        clearInterval(interval);
+                        alert('Fehler bei der Analyse: ' + data.error);
+                        document.getElementById('loading').classList.add('hidden');
+                    }
+
+                    if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        alert('Timeout: Analyse dauert zu lange. Bitte versuche eine kürzere Datei.');
+                        document.getElementById('loading').classList.add('hidden');
+                    }
+                } catch (error) {
+                    console.error('Poll error:', error);
+                }
+            }, 2000); // Check every 2 seconds
+        }
 
         function displayResults(data) {
             const getScoreColor = (score) => score >= 8 ? 'green' : score >= 6 ? 'yellow' : 'orange';
 
             let html = '';
 
-            // Jazz Context
-            html += `<div class="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6">
-                <h3 class="font-semibold text-purple-900 mb-4">🎷 Jazz-Kontext Analyse</h3>
-                <div class="space-y-2 text-sm">
-                    <p><strong>Tempo:</strong> ${data.jazz_analysis.tempo_category}</p>
-                    <p class="text-purple-700">${data.jazz_analysis.tempo_reference}</p>
-                    <p><strong>Rhythmik:</strong> ${data.jazz_analysis.rhythm_assessment}</p>
-                    <p><strong>Dichte:</strong> ${data.jazz_analysis.density_assessment}</p>
-                    <p><strong>Swing-Feel:</strong> ${data.jazz_analysis.swing_feel}</p>
-                    <p><strong>Ähnlich:</strong> ${data.jazz_analysis.similar_artists.join(', ')}</p>
-                </div>
-            </div>`;
+            html += '<div class="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6"><h3 class="font-semibold text-purple-900 mb-4">🎷 Jazz-Kontext Analyse</h3><div class="space-y-2 text-sm"><p><strong>Tempo:</strong> ' + data.jazz_analysis.tempo_category + '</p><p class="text-purple-700">' + data.jazz_analysis.tempo_reference + '</p><p><strong>Rhythmik:</strong> ' + data.jazz_analysis.rhythm_assessment + '</p><p><strong>Dichte:</strong> ' + data.jazz_analysis.density_assessment + '</p><p><strong>Swing-Feel:</strong> ' + data.jazz_analysis.swing_feel + '</p><p><strong>Ähnlich:</strong> ' + data.jazz_analysis.similar_artists.join(', ') + '</p></div></div>';
 
-            // Audio Features
-            html += `<div class="bg-slate-50 border border-slate-200 rounded-xl p-6">
-                <h3 class="font-semibold text-slate-900 mb-4">📊 Librosa Messwerte</h3>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div><p class="text-slate-600">Dauer</p><p class="font-mono font-bold">${data.audio_features.duration}s</p></div>
-                    <div><p class="text-slate-600">Tempo</p><p class="font-mono font-bold">${data.audio_features.tempo.toFixed(1)} BPM</p></div>
-                    <div><p class="text-slate-600">Stabilität</p><p class="font-mono font-bold">${(data.audio_features.tempo_stability * 100).toFixed(0)}%</p></div>
-                    <div><p class="text-slate-600">Noten-Dichte</p><p class="font-mono font-bold">${data.audio_features.note_density.toFixed(2)}/s</p></div>
-                    <div><p class="text-slate-600">Dynamik</p><p class="font-mono font-bold">${data.audio_features.dynamics.dynamic_range}x</p></div>
-                    <div><p class="text-slate-600">Komplexität</p><p class="font-mono font-bold">${data.audio_features.rhythm_complexity}/10</p></div>
-                </div>
-            </div>`;
+            html += '<div class="bg-slate-50 border border-slate-200 rounded-xl p-6"><h3 class="font-semibold text-slate-900 mb-4">📊 Librosa Messwerte</h3><div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm"><div><p class="text-slate-600">Dauer</p><p class="font-mono font-bold">' + data.audio_features.duration + 's</p></div><div><p class="text-slate-600">Tempo</p><p class="font-mono font-bold">' + data.audio_features.tempo.toFixed(1) + ' BPM</p></div><div><p class="text-slate-600">Stabilität</p><p class="font-mono font-bold">' + (data.audio_features.tempo_stability * 100).toFixed(0) + '%</p></div><div><p class="text-slate-600">Noten-Dichte</p><p class="font-mono font-bold">' + data.audio_features.note_density.toFixed(2) + '/s</p></div><div><p class="text-slate-600">Dynamik</p><p class="font-mono font-bold">' + data.audio_features.dynamics.dynamic_range + 'x</p></div><div><p class="text-slate-600">Komplexität</p><p class="font-mono font-bold">' + data.audio_features.rhythm_complexity + '/10</p></div></div></div>';
 
-            // Overall Score
             const color = getScoreColor(data.overall_score);
-            html += `<div class="bg-white rounded-2xl shadow-lg p-8 text-center">
-                <h2 class="text-2xl font-bold mb-4">Gesamtbewertung</h2>
-                <div class="text-6xl font-bold text-${color}-600 mb-2">
-                    ${data.overall_score}<span class="text-3xl text-gray-400">/10</span>
-                </div>
-            </div>`;
+            html += '<div class="bg-white rounded-2xl shadow-lg p-8 text-center"><h2 class="text-2xl font-bold mb-4">Gesamtbewertung</h2><div class="text-6xl font-bold text-' + color + '-600 mb-2">' + data.overall_score + '<span class="text-3xl text-gray-400">/10</span></div></div>';
 
-            // Feedback Categories
             const categories = [
                 { title: 'Rhythmus & Timing', data: data.feedback.rhythm },
                 { title: 'Harmonie', data: data.feedback.harmony },
@@ -176,19 +203,7 @@ HTML_TEMPLATE = """
 
             categories.forEach(cat => {
                 const catColor = getScoreColor(cat.data.score);
-                html += `<div class="bg-white rounded-2xl shadow-lg p-6">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-xl font-bold">${cat.title}</h3>
-                        <span class="text-2xl font-bold text-${catColor}-600">${cat.data.score.toFixed(1)}</span>
-                    </div>
-                    <p class="text-gray-700 mb-3">${cat.data.feedback}</p>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <p class="font-semibold mb-2">Tipps:</p>
-                        <ul class="space-y-1">
-                            ${cat.data.tips.map(tip => `<li class="text-sm text-gray-600">• ${tip}</li>`).join('')}
-                        </ul>
-                    </div>
-                </div>`;
+                html += '<div class="bg-white rounded-2xl shadow-lg p-6"><div class="flex items-center justify-between mb-2"><h3 class="text-xl font-bold">' + cat.title + '</h3><span class="text-2xl font-bold text-' + catColor + '-600">' + cat.data.score.toFixed(1) + '</span></div><p class="text-gray-700 mb-3">' + cat.data.feedback + '</p><div class="bg-gray-50 rounded-lg p-4"><p class="font-semibold mb-2">Tipps:</p><ul class="space-y-1">' + cat.data.tips.map(tip => '<li class="text-sm text-gray-600">• ' + tip + '</li>').join('') + '</ul></div></div>';
             });
 
             document.getElementById('results').innerHTML = html;
@@ -200,16 +215,15 @@ HTML_TEMPLATE = """
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Web UI - Direkt im Browser nutzbar"""
     return HTML_TEMPLATE
 
 
 # ============================================================================
-# AUDIO ANALYSIS FUNCTIONS
+# AUDIO ANALYSIS FUNCTIONS (Same as before)
 # ============================================================================
 
 def analyze_audio_file(audio_path: str) -> Dict:
-    y, sr = librosa.load(audio_path, sr=22050)
+    y, sr = librosa.load(audio_path, sr=22050, duration=300)  # Max 5 minutes
     duration = librosa.get_duration(y=y, sr=sr)
     
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
@@ -233,8 +247,6 @@ def analyze_audio_file(audio_path: str) -> Dict:
     spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
     spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
     spectral_flatness = librosa.feature.spectral_flatness(y=y)[0]
-    
-    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
     
     return {
         "duration": float(duration),
@@ -414,20 +426,14 @@ def generate_rule_based_feedback(audio_features: Dict, jazz_analysis: Dict) -> D
 
 
 # ============================================================================
-# API ENDPOINTS
+# BACKGROUND PROCESSING
 # ============================================================================
 
-@app.post("/analyze")
-async def analyze_audio(file: UploadFile = File(...)):
-    if not file.content_type.startswith('audio/'):
-        raise HTTPException(status_code=400, detail="Nur Audio-Dateien erlaubt")
-    
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-    
+def process_audio_in_background(analysis_id: str, tmp_path: str):
+    """Background task für Audio-Analyse"""
     try:
+        analysis_results[analysis_id] = {"status": "processing"}
+        
         audio_features = analyze_audio_file(tmp_path)
         jazz_analysis = analyze_jazz_patterns(audio_features)
         feedback = generate_rule_based_feedback(audio_features, jazz_analysis)
@@ -439,15 +445,57 @@ async def analyze_audio(file: UploadFile = File(...)):
             feedback["articulation"]["score"]
         ) / 4
         
-        return {
+        result = {
             "overall_score": round(overall_score, 1),
             "audio_features": audio_features,
             "jazz_analysis": jazz_analysis,
             "feedback": feedback
         }
         
+        analysis_results[analysis_id] = {
+            "status": "completed",
+            "result": result
+        }
+        
+    except Exception as e:
+        analysis_results[analysis_id] = {
+            "status": "error",
+            "error": str(e)
+        }
     finally:
-        os.unlink(tmp_path)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+# ============================================================================
+# API ENDPOINTS
+# ============================================================================
+
+@app.post("/analyze-async")
+async def analyze_audio_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    """Async endpoint - startet Analyse im Hintergrund"""
+    if not file.content_type.startsWith('audio/'):
+        raise HTTPException(status_code=400, detail="Nur Audio-Dateien erlaubt")
+    
+    analysis_id = str(uuid.uuid4())
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+    
+    background_tasks.add_task(process_audio_in_background, analysis_id, tmp_path)
+    
+    return {"analysis_id": analysis_id, "status": "processing"}
+
+
+@app.get("/result/{analysis_id}")
+async def get_result(analysis_id: str):
+    """Hole Analyse-Ergebnis"""
+    if analysis_id not in analysis_results:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    
+    return analysis_results[analysis_id]
 
 
 @app.get("/health")
