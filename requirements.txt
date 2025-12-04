@@ -7,3 +7,4 @@ python-multipart==0.0.6
 anthropic==0.7.0
 soundfile==0.12.1
 numba>=0.57.0
+setuptools>=65.0.0
