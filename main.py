@@ -474,7 +474,7 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
 @app.post("/analyze-async")
 async def analyze_audio_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """Async endpoint - startet Analyse im Hintergrund"""
-    if not file.content_type.startsWith('audio/'):
+    if not file.content_type.startswith('audio/'):
         raise HTTPException(status_code=400, detail="Nur Audio-Dateien erlaubt")
     
     analysis_id = str(uuid.uuid4())
