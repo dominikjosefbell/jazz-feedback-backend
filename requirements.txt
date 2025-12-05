@@ -1,12 +1,70 @@
+# Jazz Feedback Platform - Mit Basic Pitch Note Detection
+
+# Web Framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
-anthropic==0.7.0
-setuptools>=69.0.0
---only-binary :all:
-numpy
-scipy
-librosa
-soundfile
-numba
+
+# Audio Analysis
+librosa==0.10.1
+soundfile==0.12.1
+numpy==1.24.3
+scipy==1.11.4
+
+# Note Detection
+basic-pitch==0.2.5
+
+# Apertus via Hugging Face
 huggingface-hub>=0.20.0
+
+# TensorFlow (für Basic Pitch)
+tensorflow==2.13.0
+
+setuptools>=69.0.0
+```
+
+4. Commit message: `Add Basic Pitch dependencies`
+5. Klicke: **"Commit changes"**
+
+---
+
+### ✅ Schritt 4: Render.com - Auto-Deploy abwarten
+
+**Render deployed AUTOMATISCH wenn du zu GitHub pushst!**
+
+1. Gehe zu: `https://dashboard.render.com`
+2. Klicke auf deinen Service (jazz-feedback-apertus)
+3. Warte ~5-15 Minuten (TensorFlow ist groß!)
+4. Schau dir die **Logs** an:
+   - Solltest sehen: "Installing tensorflow..."
+   - Dann: "Installing basic-pitch..."
+   - Dann: "Application startup complete"
+
+**Wichtig:** Deployment dauert **länger als sonst** (TensorFlow ist ~500MB)
+
+**Status checken:**
+- Oben rechts: sollte **"Live"** 🟢 werden
+- Falls **"Deploy failed"** 🔴 → Logs checken
+
+---
+
+### ✅ Schritt 5: Testen!
+
+1. Öffne deine App URL: `https://jazz-feedback-apertus.onrender.com`
+
+2. **Check Status Badge:**
+   - Sollte jetzt zeigen: "🇨🇭 Apertus AI + 🎹 Basic Pitch aktiv"
+   - Falls nur "AI deaktiviert" → HF_TOKEN Problem (siehe unten)
+
+3. **Upload Test-Audio:**
+   - Lade eine kurze Jazz-Aufnahme hoch (30-60 Sekunden)
+   - Klicke "Analyse starten"
+   - Warte ~1-2 Minuten
+
+4. **Erwarte neue Section in Ergebnissen:**
+```
+   🎹 Note Detection
+   Erkannte Noten: 127
+   Tonumfang: C3 - F5
+   Häufigste Noten: C, D, E, F, G
+   Vermutete Tonart: C (vermutlich)
