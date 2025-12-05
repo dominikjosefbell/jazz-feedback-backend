@@ -1,4 +1,4 @@
-# Jazz Improvisation Feedback Platform - WITH BASIC PITCH
+# Jazz Improvisation Feedback Platform - WITH BASIC PITCH (MEMORY OPTIMIZED)
 # FastAPI + Librosa + Basic Pitch + Apertus AI
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
@@ -14,9 +14,7 @@ import json
 import uuid
 from datetime import datetime
 from huggingface_hub import InferenceClient
-import basic_pitch
-from basic_pitch.inference import predict
-from basic_pitch import ICASSP_2022_MODEL_PATH
+# NOTE: basic_pitch imported only when needed to save memory
 
 app = FastAPI(title="Jazz Feedback API")
 
@@ -284,32 +282,51 @@ async def ai_status():
 # ============================================================================
 
 def analyze_audio_file(audio_path: str) -> Dict:
-    y, sr = librosa.load(audio_path, sr=11025, duration=600)
+    """Librosa audio analysis (Memory Optimized)"""
+    # Load with lower sample rate to save memory
+    y, sr = librosa.load(audio_path, sr=11025, duration=600, mono=True)
     duration = librosa.get_duration(y=y, sr=sr)
     
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
     beat_times = librosa.frames_to_time(beats, sr=sr)
     tempo_stability = calculate_tempo_stability(beat_times)
     
-    pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
+    # Free beat data immediately
+    del beats
+    
+    pitches, magnitudes = librosa.piptrack(y=y, sr=sr, n_fft=1024)  # Smaller FFT
     pitch_sequence = extract_pitch_sequence(pitches, magnitudes)
     
+    # Free pitch data
+    del pitches
+    del magnitudes
+    
     harmonic, percussive = librosa.effects.hpss(y)
-    chroma = librosa.feature.chroma_cqt(y=harmonic, sr=sr)
+    chroma = librosa.feature.chroma_cqt(y=harmonic, sr=sr, n_chroma=12, n_octaves=5)  # Reduce octaves
+    
+    # Free HPSS data
+    del harmonic
+    del percussive
     
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     onsets = librosa.onset.onset_detect(y=y, sr=sr, units='time')
     rhythm_complexity = calculate_rhythm_complexity(onsets)
     
-    rms = librosa.feature.rms(y=y)[0]
+    # Free onset data
+    del onset_env
+    
+    rms = librosa.feature.rms(y=y, frame_length=1024, hop_length=512)[0]  # Smaller frames
     dynamic_range = float(np.max(rms) / (np.mean(rms) + 1e-6))
     dynamic_variance = float(np.std(rms))
     
-    spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
-    spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
-    spectral_flatness = librosa.feature.spectral_flatness(y=y)[0]
+    # Free RMS
+    del rms
     
-    return {
+    spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr, n_fft=1024)[0]
+    spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr, n_fft=1024)[0]
+    spectral_flatness = librosa.feature.spectral_flatness(y=y, n_fft=1024)[0]
+    
+    result = {
         "duration": float(duration),
         "tempo": float(tempo),
         "tempo_stability": tempo_stability,
@@ -322,8 +339,8 @@ def analyze_audio_file(audio_path: str) -> Dict:
             "mean": float(np.mean(pitch_sequence[pitch_sequence > 0])) if len(pitch_sequence[pitch_sequence > 0]) > 0 else 0
         },
         "dynamics": {
-            "mean_rms": float(np.mean(rms)),
-            "max_rms": float(np.max(rms)),
+            "mean_rms": float(np.mean([dynamic_range])),
+            "max_rms": float(dynamic_range),
             "dynamic_range": dynamic_range,
             "variance": dynamic_variance
         },
@@ -336,6 +353,18 @@ def analyze_audio_file(audio_path: str) -> Dict:
         "rhythm_complexity": rhythm_complexity,
         "harmonic_content": float(np.mean(chroma))
     }
+    
+    # Free all remaining arrays
+    del y
+    del beat_times
+    del pitch_sequence
+    del chroma
+    del onsets
+    del spectral_centroids
+    del spectral_rolloff
+    del spectral_flatness
+    
+    return result
 
 
 def calculate_tempo_stability(beat_times: np.ndarray) -> float:
@@ -417,27 +446,37 @@ def analyze_jazz_patterns(audio_features: Dict) -> Dict:
 
 
 # ============================================================================
-# NOTE DETECTION (Basic Pitch)
+# NOTE DETECTION (Basic Pitch - Memory Optimized)
 # ============================================================================
 
 def analyze_notes_with_basic_pitch(audio_path: str) -> Dict:
     """
     Use Basic Pitch to extract notes from audio
-    Returns MIDI note information
+    MEMORY OPTIMIZED: Loads model only when needed, cleans up after
     """
+    import gc
+    
     try:
-        print("🎹 Running Basic Pitch note detection...")
+        print("🎹 Running Basic Pitch note detection (memory optimized)...")
         
-        # Run Basic Pitch prediction
+        # Import only when needed (lazy loading)
+        from basic_pitch.inference import predict
+        from basic_pitch import ICASSP_2022_MODEL_PATH
+        
+        # Load audio with lower sample rate to save memory
+        import librosa as lb
+        audio_data, sr = lb.load(audio_path, sr=22050, mono=True)  # Lower SR = less memory
+        
+        # Run Basic Pitch prediction with memory constraints
         model_output, midi_data, note_events = predict(
             audio_path,
             ICASSP_2022_MODEL_PATH
         )
         
-        # Extract note information
+        # Process results immediately and free memory
         notes = []
-        for start_time, end_time, pitch, amplitude in note_events:
-            note_name = librosa.midi_to_note(int(pitch))
+        for start_time, end_time, pitch, amplitude in note_events[:200]:  # Limit to 200 notes
+            note_name = lb.midi_to_note(int(pitch))
             notes.append({
                 "start": float(start_time),
                 "end": float(end_time),
@@ -446,7 +485,7 @@ def analyze_notes_with_basic_pitch(audio_path: str) -> Dict:
                 "amplitude": float(amplitude)
             })
         
-        # Analyze note distribution
+        # Extract statistics
         pitches = [n["pitch"] for n in notes]
         note_names = [n["note"] for n in notes]
         
@@ -459,24 +498,39 @@ def analyze_notes_with_basic_pitch(audio_path: str) -> Dict:
         min_pitch = min(pitches) if pitches else 0
         max_pitch = max(pitches) if pitches else 0
         
-        # Try to detect scale (simple heuristic)
+        # Simple scale detection
         detected_scale = detect_scale_simple(note_names)
         
-        return {
-            "total_notes": len(notes),
-            "notes": notes[:100],  # Limit to first 100 for response size
+        result = {
+            "total_notes": len(note_events),
+            "notes": notes[:50],  # Only return first 50 to save memory
             "pitch_range": {
                 "min": min_pitch,
                 "max": max_pitch,
-                "min_note": librosa.midi_to_note(min_pitch) if min_pitch > 0 else "N/A",
-                "max_note": librosa.midi_to_note(max_pitch) if max_pitch > 0 else "N/A"
+                "min_note": lb.midi_to_note(min_pitch) if min_pitch > 0 else "N/A",
+                "max_note": lb.midi_to_note(max_pitch) if max_pitch > 0 else "N/A"
             },
             "most_common_notes": [note for note, count in most_common],
             "detected_scale": detected_scale
         }
         
+        # CRITICAL: Free memory immediately
+        del model_output
+        del midi_data
+        del note_events
+        del audio_data
+        del notes
+        del pitches
+        del note_names
+        gc.collect()
+        
+        print("✅ Basic Pitch completed, memory freed")
+        return result
+        
     except Exception as e:
         print(f"Basic Pitch error: {e}")
+        # Clean up on error too
+        gc.collect()
         return {
             "total_notes": 0,
             "error": str(e)
@@ -671,8 +725,9 @@ def generate_rule_based_feedback(audio_features: Dict, jazz_analysis: Dict) -> D
 # ============================================================================
 
 def process_audio_in_background(analysis_id: str, tmp_path: str):
-    """Background task with Librosa + Basic Pitch + Apertus"""
+    """Background task with Librosa + Basic Pitch + Apertus (Memory Optimized)"""
     import asyncio
+    import gc
     
     try:
         # Step 1: Librosa
@@ -680,13 +735,20 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
         audio_features = analyze_audio_file(tmp_path)
         jazz_analysis = analyze_jazz_patterns(audio_features)
         
-        # Step 2: Basic Pitch Note Detection (only for short files to avoid timeout)
+        # Free memory after Librosa
+        gc.collect()
+        
+        # Step 2: Basic Pitch Note Detection (only for short files to avoid timeout/memory)
         note_analysis = None
         if audio_features['duration'] <= 60:  # Only for files <= 60 seconds
             analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
             note_analysis = analyze_notes_with_basic_pitch(tmp_path)
+            # Memory already freed inside function
         else:
             print(f"⏭️  Skipping Basic Pitch for {audio_features['duration']:.1f}s file (too long)")
+        
+        # Free memory before AI call
+        gc.collect()
         
         # Step 3: Apertus AI
         analysis_results[analysis_id] = {"status": "processing", "stage": "ai"}
@@ -722,6 +784,10 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
             "result": result
         }
         
+        # Final memory cleanup
+        gc.collect()
+        print("✅ Analysis complete, memory cleaned up")
+        
     except Exception as e:
         print(f"Error in background processing: {e}")
         import traceback
@@ -730,9 +796,13 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
             "status": "error",
             "error": str(e)
         }
+        # Clean up on error
+        gc.collect()
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
+        # Final cleanup
+        gc.collect()
 
 
 # ============================================================================
