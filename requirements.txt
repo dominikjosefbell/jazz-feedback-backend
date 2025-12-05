@@ -10,3 +10,7 @@ huggingface-hub>=0.20.0
 tensorflow==2.11.0
 protobuf==3.19.6
 setuptools>=69.0.0
+# RAG System
+chromadb==0.4.22
+sentence-transformers==2.3.1
+langchain==0.1.4
