@@ -9,3 +9,4 @@ scipy
 librosa
 soundfile
 numba
+huggingface-hub>=0.20.0
