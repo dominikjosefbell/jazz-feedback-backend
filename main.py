@@ -589,7 +589,7 @@ NOTE DETECTION (Basic Pitch):
 - Vermutete Tonart: {note_analysis.get('detected_scale', 'unbekannt')}
 """
         
-        prompt = f"""Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
+prompt = f"""Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
 
 AUDIO-DATEN (Librosa-Analyse):
 - Dauer: {audio_features['duration']:.1f} Sekunden
@@ -605,10 +605,6 @@ AUDIO-DATEN (Librosa-Analyse):
 JAZZ-KONTEXT:
 - Tempo-Kategorie: {jazz_analysis['tempo_category']}
 - Referenz: {jazz_analysis['tempo_reference']}
-RELEVANTE JAZZ-THEORIE (aus Knowledge Base):
-{knowledge_context}
-
----
 - Rhythmische Bewertung: {jazz_analysis['rhythm_assessment']}
 - Phrasierungs-Dichte: {jazz_analysis['density_assessment']}
 - Swing-Feel: {jazz_analysis['swing_feel']}
