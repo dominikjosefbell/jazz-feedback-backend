@@ -174,7 +174,7 @@ HTML_TEMPLATE = """
         });
 
         async function pollForResults(id) {
-            const maxAttempts = 120;
+            const maxAttempts = 60; // 60 attempts × 5 seconds = 5 minutes
             let attempts = 0;
 
             const interval = setInterval(async () => {
@@ -198,7 +198,7 @@ HTML_TEMPLATE = """
                         if (data.stage === 'librosa') {
                             document.getElementById('loadingText').textContent = '🎵 Librosa Analyse...';
                         } else if (data.stage === 'notes') {
-                            document.getElementById('loadingText').textContent = '🎹 Note Detection (Basic Pitch)...';
+                            document.getElementById('loadingText').textContent = '🎹 Note Detection (kann bis zu 2 Min dauern)...';
                         } else if (data.stage === 'ai') {
                             document.getElementById('loadingText').textContent = '🇨🇭 Apertus AI Feedback...';
                         }
@@ -210,13 +210,13 @@ HTML_TEMPLATE = """
 
                     if (attempts >= maxAttempts) {
                         clearInterval(interval);
-                        alert('Timeout');
+                        alert('Timeout: Analyse dauert zu lange. Bitte versuche eine kürzere Audio-Datei oder warte noch etwas und lade die Seite neu.');
                         document.getElementById('loading').classList.add('hidden');
                     }
                 } catch (error) {
                     console.error('Poll error:', error);
                 }
-            }, 2000);
+            }, 5000); // Check every 5 seconds instead of 2
         }
 
         function displayResults(data) {
@@ -680,9 +680,13 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
         audio_features = analyze_audio_file(tmp_path)
         jazz_analysis = analyze_jazz_patterns(audio_features)
         
-        # Step 2: Basic Pitch Note Detection
-        analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
-        note_analysis = analyze_notes_with_basic_pitch(tmp_path)
+        # Step 2: Basic Pitch Note Detection (only for short files to avoid timeout)
+        note_analysis = None
+        if audio_features['duration'] <= 60:  # Only for files <= 60 seconds
+            analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
+            note_analysis = analyze_notes_with_basic_pitch(tmp_path)
+        else:
+            print(f"⏭️  Skipping Basic Pitch for {audio_features['duration']:.1f}s file (too long)")
         
         # Step 3: Apertus AI
         analysis_results[analysis_id] = {"status": "processing", "stage": "ai"}
@@ -708,7 +712,7 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
             "overall_score": round(overall_score, 1),
             "audio_features": audio_features,
             "jazz_analysis": jazz_analysis,
-            "note_analysis": note_analysis,  # NEW!
+            "note_analysis": note_analysis,  # Can be None for long files
             "feedback": feedback,
             "ai_generated": apertus_client is not None
         }
@@ -719,6 +723,9 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
         }
         
     except Exception as e:
+        print(f"Error in background processing: {e}")
+        import traceback
+        traceback.print_exc()
         analysis_results[analysis_id] = {
             "status": "error",
             "error": str(e)
