@@ -1,7 +1,6 @@
 # Jazz Improvisation Feedback Platform - WITH BASIC PITCH (MEMORY OPTIMIZED)
 # FastAPI + Librosa + Basic Pitch + Apertus AI
 
-from knowledge_loader import get_knowledge_base
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -567,21 +566,17 @@ def detect_scale_simple(note_names: List[str]) -> Optional[str]:
 # ============================================================================
 
 async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_analysis: Dict) -> Dict:
-    """Nutzt Apertus AI für intelligentes Feedback (now with RAG knowledge)"""
+    """Nutzt Apertus AI für intelligentes Feedback (now with note data)"""
     
     if not apertus_client:
         print("Apertus nicht verfügbar, fallback")
         return None
     
     try:
-        # Get relevant jazz knowledge from RAG system
-        print("🔍 Searching knowledge base...")
-        kb = get_knowledge_base()
-        knowledge_context = kb.get_context_for_analysis(audio_features, jazz_analysis)
-        print(f"✅ Retrieved {len(knowledge_context)} chars of context")
-        
         # Enhanced prompt with note information
         note_info = ""
+        if note_analysis and note_analysis.get("total_notes", 0) > 0:
+            note_info = f"""
 NOTE DETECTION (Basic Pitch):
 - Erkannte Noten: {note_analysis['total_notes']}
 - Tonumfang: {note_analysis['pitch_range']['min_note']} bis {note_analysis['pitch_range']['max_note']}
@@ -589,8 +584,7 @@ NOTE DETECTION (Basic Pitch):
 - Vermutete Tonart: {note_analysis.get('detected_scale', 'unbekannt')}
 """
         
-prompt = f"""
-Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
+        prompt = f"""Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
 
 AUDIO-DATEN (Librosa-Analyse):
 - Dauer: {audio_features['duration']:.1f} Sekunden
