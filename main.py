@@ -11,6 +11,7 @@ import tempfile
 import os
 from typing import Dict, List, Optional
 import json
+from knowledge_loader import get_knowledge_base
 import uuid
 from datetime import datetime
 from huggingface_hub import InferenceClient
@@ -573,6 +574,19 @@ async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_a
         return None
     
     try:
+         # Get relevant jazz theory context
+        try:
+            kb = get_knowledge_base()
+            jazz_context = kb.get_context_for_analysis(
+                tempo=audio_features['tempo'],
+                tempo_category=jazz_analysis['tempo_category'],
+                rhythm_complexity=audio_features['rhythm_complexity']
+            )
+            print(f"✅ Retrieved {len(jazz_context)} chars of jazz theory context")
+        except Exception as e:
+            print(f"⚠️ Could not load knowledge base: {e}")
+            jazz_context = ""
+        
         # Enhanced prompt with note information
         note_info = ""
         if note_analysis and note_analysis.get("total_notes", 0) > 0:
@@ -584,7 +598,8 @@ NOTE DETECTION (Basic Pitch):
 - Vermutete Tonart: {note_analysis.get('detected_scale', 'unbekannt')}
 """
         
-        prompt = f"""Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
+prompt = f"""
+Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
 
 AUDIO-DATEN (Librosa-Analyse):
 - Dauer: {audio_features['duration']:.1f} Sekunden
@@ -605,16 +620,21 @@ JAZZ-KONTEXT:
 - Swing-Feel: {jazz_analysis['swing_feel']}
 - Ähnliche Künstler: {', '.join(jazz_analysis['similar_artists'])}
 
+{jazz_context}
+
 Gib detailliertes Feedback in 4 Kategorien (je 1-10 Punkte):
 1. Rhythmus & Timing - Analysiere Tempo-Stabilität, Swing-Feel, rhythmische Komplexität
 2. Harmonie - Bewerte basierend auf spektralen Eigenschaften, Note Detection und Jazz-Kontext
 3. Melodie & Phrasierung - Beurteile Noten-Dichte, Phrasenlänge, melodische Entwicklung, Tonumfang
 4. Artikulation & Dynamik - Analysiere Dynamik-Range und Variabilität
 
+Nutze die bereitgestellten Jazz-Theory Informationen um spezifische, fundierte Übungstipps zu geben.
+Referenziere konkrete Techniken und Beispiele aus der Jazz-Geschichte.
+
 Für jede Kategorie:
 - Gib einen Score (1.0 bis 10.0)
 - Schreibe 2-3 Sätze spezifisches Feedback
-- Gib 3 konkrete, umsetzbare Übungstipps
+- Gib 3 konkrete, umsetzbare Übungstipps (nutze Jazz-Theory Kontext!)
 
 Antworte NUR mit diesem JSON-Format (keine Markdown-Backticks):
 {{
@@ -640,8 +660,7 @@ Antworte NUR mit diesem JSON-Format (keine Markdown-Backticks):
   }}
 }}"""
         
-        print("🇨🇭 Calling Apertus API...")
-        
+        print("🇨🇭 Calling Apertus API with RAG context...")        
         response = apertus_client.chat_completion(
             model="swiss-ai/Apertus-70B-Instruct-2509",
             messages=[{"role": "user", "content": prompt}],
@@ -659,7 +678,7 @@ Antworte NUR mit diesem JSON-Format (keine Markdown-Backticks):
             clean = clean[json_start:json_end]
         
         feedback = json.loads(clean)
-        print("✅ Apertus feedback generated")
+        print("✅ Apertus feedback generated with RAG context")
         return feedback
         
     except Exception as e:
