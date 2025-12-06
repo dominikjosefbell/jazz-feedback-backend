@@ -14,3 +14,9 @@ setuptools>=69.0.0
 chromadb==0.4.22
 sentence-transformers==2.3.1
 langchain==0.1.4
+# Existing dependencies bleiben...
+
+# RAG System
+chromadb==0.4.22
+sentence-transformers==2.3.1
+langchain==0.1.4
