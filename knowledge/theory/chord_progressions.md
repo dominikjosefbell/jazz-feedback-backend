@@ -1,263 +1,549 @@
-# Jazz Chord Progressions - Essential Guide
+# Jazz Chord Progressions - Comprehensive Guide
 
-## ii-V-I Progression
-
-### The Foundation of Jazz Harmony
-
-**Structure:**
-- ii: Minor 7th chord (Dm7 in C major)
-- V: Dominant 7th chord (G7 in C major)
-- I: Major 7th chord (Cmaj7 in C major)
-
-**In C Major:** Dm7 - G7 - Cmaj7
-
-### Voice Leading:
-- Smooth movement between chords
-- 3rd of Dm7 (F) → 7th of G7 (F) → 3rd of Cmaj7 (E)
-- 7th of Dm7 (C) → 3rd of G7 (B) → 7th of Cmaj7 (B)
-
-### Scale Choices:
-- **Dm7:** Dorian mode (D E F G A B C)
-- **G7:** Mixolydian or Altered scale
-- **Cmaj7:** Ionian or Lydian mode
-
-### Improvisation Tips:
-1. **Target chord tones** on strong beats
-2. **Use approach notes** (chromatic or diatonic)
-3. **Create tension and release** (V7 → Imaj7)
-4. **Vary rhythm** - don't play all quarter notes
-
-### Famous Examples:
-- "Autumn Leaves" - multiple ii-V-I's
-- "All The Things You Are" - ii-V sequences
-- "Tune Up" - ii-V-I in different keys
+*Source: Based on Open Music Theory (CC-BY-SA 4.0) and public domain jazz theory*
 
 ---
 
-## Minor ii-V-i
+## The ii-V-I Progression
 
-### Structure:
-- ii: Half-diminished chord (Bm7♭5 in A minor)
-- V: Dominant 7th chord (E7 in A minor)
-- i: Minor 7th or minor major 7th (Am7 or AmMaj7)
+### Major ii-V-I
 
-**In A Minor:** Bm7♭5 - E7 - Am7
+**The foundation of jazz harmony!**
 
-### Scale Choices:
-- **Bm7♭5:** Locrian mode (B C D E F G A)
-- **E7:** Harmonic minor 5th mode, Phrygian dominant, or Altered
-- **Am7:** Dorian, Aeolian, or melodic minor
+**In C major:**
+```
+Dm7 | G7 | Cmaj7 | Cmaj7 |
+ ii    V     I      I
+```
 
-### Emotional Character:
-- More melancholic than major ii-V-I
-- Creates strong resolution to minor tonic
-- Common in ballads and bossa nova
+**Voice Leading:**
+```
+Dm7:  D - F - A - C
+G7:   D - F - B - D   (keep D, F moves down, A→B, C→D)
+Cmaj7: C - E - B - E   (smooth resolution)
+```
+
+**Scale Choices:**
+- **Dm7:** D Dorian (D-E-F-G-A-B-C)
+- **G7:** G Mixolydian (G-A-B-C-D-E-F) OR G Altered (for tension)
+- **Cmaj7:** C Lydian (C-D-E-F♯-G-A-B) OR C Major
+
+**Practice Tips:**
+1. Practice in all 12 keys (cycle of 5ths)
+2. Play guide tones (3rd and 7th of each chord)
+3. Notice the voice leading: 
+   - F (3rd of Dm7) → F (7th of G7) → E (3rd of Cmaj7)
+   - C (7th of Dm7) → B (3rd of G7) → B (7th of Cmaj7)
+
+**Famous Examples:**
+- "Autumn Leaves" (constant ii-V-I's)
+- "All The Things You Are"
+- "Satin Doll"
 
 ---
 
-## Blues Progression
+### Minor ii-V-i
 
-### 12-Bar Blues:
+**In C minor:**
 ```
-| I7  | I7  | I7  | I7  |
-| IV7 | IV7 | I7  | I7  |
-| V7  | IV7 | I7  | V7  |
+Dm7♭5 | G7alt | Cm(maj7) | Cm7 |
+  iiø     V       i         i
 ```
 
-### Jazz Blues Variation:
+**Scale Choices:**
+- **Dm7♭5:** D Locrian (D-E♭-F-G-A♭-B♭-C) OR D Locrian ♮2
+- **G7alt:** G Altered scale (G-A♭-B♭-C♭-D♭-E♭-F)
+- **Cm(maj7):** C Harmonic Minor (C-D-E♭-F-G-A♭-B)
+- **Cm7:** C Dorian
+
+**Darker sound than major ii-V-i!**
+
+**Practice Tips:**
+Focus on the chromatic voice leading:
+- F (3rd of Dm7♭5) → F (7th of G7) → E♭ (3rd of Cm)
+- Creates strong pull to resolution
+
+**Famous Examples:**
+- "Autumn Leaves" (B section in minor)
+- "Beautiful Love"
+- "Softly As In A Morning Sunrise"
+
+---
+
+### Extended ii-V-I (with I-VI-ii-V turnaround)
+
+**Complete cycle:**
 ```
-| Imaj7  | IV7    | Imaj7  | I7     |
-| IV7    | IV7    | Imaj7  | VI7    |
-| ii7    | V7     | Imaj7  | V7     |
+Cmaj7 | Am7 | Dm7 | G7 | Cmaj7
+  I      vi    ii    V     I
 ```
+
+**This is the basis of countless jazz standards!**
+
+**Substitution Options:**
+```
+Cmaj7 | A7alt | Dm7 | G7 | Cmaj7
+  I      ♭VI7    ii    V     I
+```
+(A7alt is a tritone sub approaching Dm7)
+
+---
+
+## Blues Progressions
+
+### 12-Bar Blues (Traditional)
 
 **In C:**
 ```
-| Cmaj7 | F7    | Cmaj7 | C7    |
-| F7    | F7    | Cmaj7 | A7    |
-| Dm7   | G7    | Cmaj7 | G7    |
+| C7  | C7  | C7  | C7  |
+| F7  | F7  | C7  | C7  |
+| G7  | F7  | C7  | G7  |
+  1     2     3     4
+  5     6     7     8
+  9     10    11    12
 ```
 
-### Improvisation Approach:
-- **Blues scale** works over entire progression
-- **Mixolydian** over each dominant chord
-- **Target 3rds and 7ths** for strong harmony
-- **Use call-and-response** phrasing
+**Scale Choices:**
+- **C Blues scale** throughout (C-E♭-F-G♭-G-B♭)
+- **C minor pentatonic** (C-E♭-F-G-B♭)
+- Mix with **C major pentatonic** for variety
+
+---
+
+### Jazz Blues (Modern)
+
+**With ii-V substitutions:**
+```
+| Cmaj7    | F7       | Cmaj7    | Cm7  F7  |
+| Fm7      | B♭7      | Cmaj7    | Em7  A7  |
+| Dm7      | G7       | Cmaj7 A7 | Dm7  G7  |
+```
+
+**Much more sophisticated harmony!**
+
+**Analysis:**
+- Bar 4: Borrowed from minor (Cm7-F7)
+- Bar 8: ii-V to D minor
+- Bar 12: Turnaround back to top
+
+**Famous Examples:**
+- Charlie Parker - "Blues for Alice"
+- Thelonious Monk - "Straight No Chaser"
+- Miles Davis - "Freddie Freeloader"
+
+---
+
+### Bird Blues (Parker Changes)
+
+**Advanced substitutions:**
+```
+| Cmaj7    | Fm7  B♭7 | Em7  A7  | E♭m7 A♭7 |
+| Dm7      | G7       | Cmaj7    | Em7  A7  |
+| Dm7      | G7       | Cmaj7 A7 | Dm7  G7  |
+```
+
+**Contains multiple ii-V's moving through keys!**
+
+**Bar-by-bar analysis:**
+- Bar 2: ii-V to E♭
+- Bar 3: ii-V to D
+- Bar 4: ii-V to D♭
+- Creates chromatic bass line: C-F-E-E♭-D-G-C
 
 ---
 
 ## Rhythm Changes
 
-### Based on "I Got Rhythm" by Gershwin
+### "I Got Rhythm" Form
+
+**The second most common form in jazz after blues!**
 
 **A Section (8 bars):**
 ```
-| Imaj7 VI7 | ii7  V7  | Imaj7 VI7 | ii7  V7  |
-| Imaj7 VI7 | ii7  V7  | ii7  V7  | Imaj7    |
+| B♭maj7 G7  | Cm7  F7  | B♭maj7 G7  | Cm7  F7  |
+| Fm7    B♭7 | E♭maj7   | Cm7   F7   | B♭maj7   |
 ```
 
-**B Section (Bridge - 8 bars):**
+**Bridge (8 bars):**
 ```
-| IIImaj7 | IIImaj7 | VImaj7 | VImaj7 |
-| IImaj7  | IImaj7  | ii7    | V7     |
+| D7     | D7     | G7     | G7     |
+| C7     | C7     | F7     | F7     |
 ```
 
-### Common Songs:
+**Structure:** AABA (32 bars total)
+
+**Famous Examples:**
 - "Oleo" - Sonny Rollins
 - "Anthropology" - Charlie Parker
-- "Moose The Mooche" - Charlie Parker
+- "Moose the Mooche" - Charlie Parker
+- "Rhythm-a-ning" - Thelonious Monk
 
-### Practice Tips:
-- Master the A section first
-- Bridge moves through different key centers
-- Fast tempo requires strong time feel
-- Common in bebop
+**Practice Tips:**
+1. Master the A section progression first
+2. Bridge is dominant 7ths descending by 4ths: D7→G7→C7→F7
+3. Practice at progressively faster tempos (bebop tunes are usually 200+ BPM!)
 
 ---
 
 ## Coltrane Changes (Giant Steps)
 
-### Revolutionary Progression
+### The Trane Progression
 
-**Structure:** Modulates through 3 key centers (major 3rds apart)
+**Revolutionary harmonic concept!**
 
-**Cycle:**
-B major → G major → E♭ major → B major
-
-**In B Major:**
+**Basic cycle:**
 ```
-| Bmaj7  D7   | Gmaj7  B♭7  | E♭maj7  | Am7  D7  |
-| Gmaj7  B♭7  | E♭maj7 F#7  | Bmaj7   | Fm7  B♭7 |
+| Bmaj7 D7  | Gmaj7 B♭7 | E♭maj7    | Am7  D7  |
+| Gmaj7 B♭7 | E♭maj7 F♯7 | Bmaj7    | Fm7  B♭7 |
 ```
 
-### Scale Strategy:
-- **Major 7th chords:** Lydian or Ionian
-- **Dominant 7th chords:** Lydian dominant or mixolydian
-- **Fast tempo:** Arpeggiate chord tones
+**Key Movement:**
+The tonic moves in **major thirds**: B → G → E♭ → B
 
-### Why It's Difficult:
-- Rapid key changes (every 2 beats at fast tempo)
-- Requires mastery of all 12 keys
-- Little time to think - must internalize changes
+**Analysis:**
+- Each major chord is approached by its V7
+- Creates rapid key changes
+- Extremely challenging to improvise over!
 
-### Practice Method:
-1. Play slowly, one chord per bar
-2. Arpeggiate each chord
-3. Connect chords with guide tones
+**Scale Approach:**
+Must change scales every 2 beats!
+```
+Bmaj7: B Lydian
+D7: D Mixolydian or Altered
+Gmaj7: G Lydian
+B♭7: B♭ Mixolydian or Altered
+etc.
+```
+
+**Practice Tips:**
+1. Start SLOWLY (60 BPM)
+2. Practice arpeggios first before scales
+3. Focus on voice leading between chords
 4. Gradually increase tempo
-5. Practice in all 12 keys
+
+**Famous Examples:**
+- "Giant Steps" - John Coltrane (the original!)
+- "Countdown" - John Coltrane
+- "Fifth House" - John Coltrane
 
 ---
 
 ## Modal Progressions
 
-### Single Chord Vamps
+### Static Modal Vamps
 
-**Example - D Dorian:**
-```
-| Dm7 | Dm7 | Dm7 | Dm7 |
-```
+**Single chord for extended periods:**
 
-**Improvisation:**
-- Use Dorian mode (D E F G A B C)
-- Create interest through rhythm and dynamics
-- Build tension through note choice
-- Less about chord changes, more about melody
+**Dorian Vamp:**
+```
+| Dm7 | Dm7 | Dm7 | Dm7 | ...
+```
 
 **Famous Examples:**
-- "So What" - Miles Davis (D Dorian, E♭ Dorian)
+- "So What" - Miles Davis (16 bars Dm7, 8 bars E♭m7, 8 bars Dm7)
 - "Impressions" - John Coltrane
-- "Maiden Voyage" - Herbie Hancock (multiple suspended chords)
 
-### Two-Chord Vamps:
+**Improvisation Approach:**
+- Use D Dorian scale exclusively
+- Create interest through rhythm, dynamics, phrasing
+- Not through harmonic movement!
 
-**Minor to Dominant:**
+---
+
+### Two-Chord Modal
+
+**Alternating between two chords:**
+
 ```
-| Dm7 | G7 | Dm7 | G7 |
+| Dm7 | E♭maj7 | Dm7 | E♭maj7 |
 ```
 
-- More movement than one-chord vamp
-- Still modal in character
-- Common in funk and fusion
+**Famous Example:**
+- "Maiden Voyage" - Herbie Hancock
+
+**Improvisation:**
+- Focus on the modal colors
+- Smooth voice leading between modes
+- Creates floating, ambiguous tonality
+
+---
+
+## Common Substitutions
+
+### Tritone Substitution
+
+**Replace V7 with ♭II7 (a tritone away)**
+
+**Example:**
+```
+Original: | Dm7 | G7   | Cmaj7 |
+Tritone:  | Dm7 | D♭7  | Cmaj7 |
+```
+
+**Why it works:**
+- G7 = G-B-D-F
+- D♭7 = D♭-F-A♭-C♭(B)
+- They share the same tritone (B-F)!
+
+**Creates chromatic bass line:** D → D♭ → C
+
+**Famous Examples:**
+- "Have You Met Miss Jones"
+- "Stella By Starlight"
+
+---
+
+### Secondary Dominants
+
+**Tonicize any chord by preceding it with its V7**
+
+**Example in C major:**
+```
+| Cmaj7 | A7  | Dm7 | G7  | Cmaj7 |
+          V/ii  ii    V     I
+```
+
+**A7 is the V of Dm, creating temporary modulation to D minor**
+
+---
+
+### Diminished 7th Passing Chords
+
+**Connect diatonic chords chromatically:**
+
+```
+| Cmaj7 | C♯dim7 | Dm7 | D♯dim7 | Em7 |
+```
+
+**Each dim7 leads smoothly by half-step to next chord**
+
+---
+
+### ♭VI Approach
+
+**Common in jazz standards:**
+
+```
+| Cmaj7 | A♭maj7 | Dm7 | G7 |
+  I       ♭VI      ii    V
+```
+
+**Creates chromatic motion: C → A♭ → D (bass line)**
 
 ---
 
 ## Turnarounds
 
-### Classic Turnaround (Last 2 Bars):
+### I-VI-ii-V
 
-**Major:**
-```
-| Imaj7 VI7 | ii7 V7 |
-```
+**The classic turnaround:**
 
-**Example in C:**
 ```
-| Cmaj7 A7 | Dm7 G7 |
+| Cmaj7 | Am7 | Dm7 | G7 ||
 ```
 
-### Variations:
-
-**Tritone Substitution:**
+**With tritone sub:**
 ```
-| Cmaj7 E♭7 | Dm7 D♭7 |
+| Cmaj7 | A7 | Dm7 | D♭7 ||
 ```
 
-**Chromatic:**
+**Chromatic version:**
 ```
-| Cmaj7 C#dim7 | Dm7 G7 |
-```
-
-**Coltrane-Style:**
-```
-| Cmaj7 E♭7 | A♭maj7 B7 | Emaj7 G7 | Cmaj7 |
+| Cmaj7 | E♭7 | A♭maj7 | D♭7 ||
 ```
 
 ---
 
-## Substitutions
+### Coltrane Turnaround
 
-### Tritone Substitution
-Replace V7 with ♭II7 (3 half-steps away).
+**Based on Giant Steps:**
 
-**Example:**
-- G7 → D♭7 (in key of C)
-- Same tritone (B-F = C♭-F)
-- Creates chromatic bass motion
+```
+| Cmaj7 E♭7 | A♭maj7 B7 | Emaj7 G7 | Cmaj7 ||
+```
 
-### Diminished 7th Substitution
-Use diminished chord as passing chord.
-
-**Example:**
-- Between I and ii: Cmaj7 - C#dim7 - Dm7
-
-### Secondary Dominants
-Dominant chord targeting any chord.
-
-**Example in C major:**
-- D7 → Gmaj7 (V7/V)
-- E7 → Am7 (V7/vi)
-- A7 → Dm7 (V7/ii)
+**Key movement in major thirds!**
 
 ---
 
-## Practice Strategy
+## Song Form Structures
 
-### Daily Routine:
-1. **Play progressions in all 12 keys**
-2. **Comp patterns** - practice voicings
-3. **Melodic approach** - play scales over changes
-4. **Improvisation** - solo over backing tracks
-5. **Transcription** - learn how masters navigate changes
+### AABA (32-bar form)
 
-### Recommended Backing Tracks:
-- iReal Pro app
-- JamKazam
-- YouTube play-alongs
-- Aebersold records
+**Most common in jazz standards:**
 
-### Speed Development:
-- Start at 60 BPM
-- Increase tempo gradually
-- Focus on smooth voice leading
-- Don't rush - accuracy over speed
+```
+A: 8 bars (main theme in tonic)
+A: 8 bars (repeat)
+B: 8 bars (bridge, often modulates)
+A: 8 bars (return to theme)
+```
+
+**Examples:**
+- "I Got Rhythm"
+- "Satin Doll"
+- "Anthropology"
+
+---
+
+### ABAC (32-bar form)
+
+```
+A: 8 bars
+B: 8 bars (contrasting section)
+A: 8 bars (return)
+C: 8 bars (new ending)
+```
+
+**Examples:**
+- "All The Things You Are"
+- "Body and Soul"
+
+---
+
+### Blues Form (12-bar)
+
+```
+A: 4 bars
+A: 4 bars (similar to first 4)
+B: 4 bars (contrasting, usually turnaround)
+```
+
+---
+
+## Practice Routine for Progressions
+
+### Week 1-2: ii-V-I Mastery
+1. Play ii-V-I in all 12 keys (major and minor)
+2. Practice guide tones only
+3. Add full arpeggios
+4. Improvise over backing tracks
+
+### Week 3-4: Blues
+1. Learn 12-bar blues in 3 keys (C, F, B♭)
+2. Learn jazz blues substitutions
+3. Practice Bird blues
+4. Transcribe blues solos
+
+### Week 5-6: Rhythm Changes
+1. Learn A section in B♭
+2. Master the bridge (D7-G7-C7-F7)
+3. Practice at slow tempos first
+4. Gradually increase to 200+ BPM
+
+### Week 7-8: Modal & Coltrane
+1. Practice "So What" changes
+2. Learn Giant Steps cycle slowly
+3. Arpeggios over Coltrane changes
+4. Combine with previous knowledge
+
+---
+
+## Harmonic Analysis Tips
+
+### How to Analyze Any Standard:
+
+1. **Identify the key center(s)**
+   - Look for I, IV, V chords
+
+2. **Find the ii-V-I progressions**
+   - They're in almost every jazz tune!
+
+3. **Spot the secondary dominants**
+   - Any dominant 7th not in the key
+
+4. **Notice substitutions**
+   - Tritone subs
+   - Diminished passing chords
+
+5. **Identify the form**
+   - AABA? ABAC? Blues?
+
+---
+
+## Common Progressions by Era
+
+### Bebop (1940s-50s):
+- Heavy use of ii-V-I
+- Chromatically descending ii-V's
+- Rhythm changes
+- Blues with substitutions
+
+### Modal Jazz (1950s-60s):
+- Static vamps
+- Dorian emphasis
+- Minimal chord changes
+- Focus on scales over chords
+
+### Post-Bop / Modern (1960s+):
+- Coltrane changes
+- Complex substitutions
+- Mixed modal and functional harmony
+- Polytonality
+
+---
+
+## Recommended Listening by Progression Type
+
+**ii-V-I mastery:**
+- Clifford Brown - "Joy Spring"
+- Red Garland - "Ahmad's Blues"
+
+**Blues:**
+- Charlie Parker - "Blues for Alice"
+- Thelonious Monk - "Straight No Chaser"
+- Sonny Rollins - "Tenor Madness"
+
+**Rhythm Changes:**
+- Charlie Parker - "Anthropology"
+- Sonny Rollins - "Oleo"
+
+**Coltrane Changes:**
+- John Coltrane - "Giant Steps"
+- John Coltrane - "Countdown"
+
+**Modal:**
+- Miles Davis - "So What"
+- John Coltrane - "Impressions"
+- Herbie Hancock - "Maiden Voyage"
+
+---
+
+## Summary: Essential Progressions
+
+**Must Know (Priority 1):**
+1. Major ii-V-I (all 12 keys)
+2. 12-bar blues
+3. I-VI-ii-V turnaround
+
+**Very Important (Priority 2):**
+4. Minor ii-V-i
+5. Jazz blues with substitutions
+6. Rhythm changes
+
+**Advanced (Priority 3):**
+7. Coltrane changes
+8. Modal progressions
+9. Complex substitutions
+
+---
+
+## Voice Leading Principles
+
+### Smooth Voice Leading Rules:
+
+1. **Move voices by the smallest interval possible**
+   - Common tones stay, other voices move by step or half-step
+
+2. **Guide tones (3rd and 7th) move in contrary or oblique motion**
+   - In ii-V-I: 3rd becomes 7th, 7th becomes 3rd
+
+3. **Avoid parallel perfect 5ths and octaves**
+   - Classic counterpoint rule still applies in jazz
+
+4. **Use voice leading to create chromatic lines**
+   - Especially in the bass and inner voices
+
+---
+
+*This document is based on Open Music Theory (CC-BY-SA 4.0) and public domain jazz theory resources. Free for commercial use with attribution.*
