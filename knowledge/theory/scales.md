@@ -1,165 +1,389 @@
 # Jazz Scales - Comprehensive Guide
 
+*Source: Based on Open Music Theory (CC-BY-SA 4.0) and public domain jazz theory*
+
+---
+
 ## Bebop Scales
 
 ### Major Bebop Scale
-The major bebop scale adds a chromatic passing tone between the 5th and 6th degrees.
 
 **Formula:** 1 2 3 4 5 ♯5 6 7
-**Example in C:** C D E F G G# A B
+
+**Example in C:**
+C - D - E - F - G - G♯ - A - B
 
 **Usage:**
-- Use over major 7th chords
-- Chromatic note creates strong resolution
-- Works well in ii-V-I progressions
+- Use over major 7th chords (Cmaj7)
+- The extra chromatic note (♯5) creates smooth voice leading
+- Perfect for descending lines over I chords
 
-**Practice Tips:**
-- Start slowly with metronome at 60 BPM
-- Emphasize chord tones on downbeats
-- Play ascending and descending
-- Practice in all 12 keys
+**Practice Tip:**
+Play ascending and descending through the scale, emphasizing chord tones (1, 3, 5, 7) on downbeats.
+
+**Famous Example:**
+Charlie Parker frequently used this scale in "Confirmation" over the opening Cmaj7 chord.
+
+---
 
 ### Dominant Bebop Scale
-Adds a major 7th to the mixolydian mode.
 
 **Formula:** 1 2 3 4 5 6 ♭7 7
-**Example in C:** C D E F G A B♭ B
+
+**Example in G:**
+G - A - B - C - D - E - F - F♯
 
 **Usage:**
-- Perfect for V7 chords
-- Creates smooth voice leading
-- Essential for bebop improvisation
+- Primary scale for dominant 7th chords (G7)
+- Extra major 7th creates tension before resolution
+- Essential for ii-V-I progressions
+- Works perfectly over blues progressions
 
-**Famous Examples:**
-- Charlie Parker: "Anthropology"
-- Dizzy Gillespie: "Groovin' High"
+**Practice Tip:**
+Practice this scale over a G7 chord, starting on different scale degrees. Notice how the chromatic passing tone (F to F♯) creates forward motion.
+
+**Famous Example:**
+Dizzy Gillespie's "Groovin' High" features extensive use of dominant bebop scales over all the V7 chords.
+
+---
 
 ### Minor Bebop Scale
-Adds a major 3rd to the dorian scale.
 
 **Formula:** 1 2 ♭3 3 4 5 6 ♭7
-**Example in C minor:** C D E♭ E F G A B♭
+
+**Example in D minor:**
+D - E - F - F♯ - G - A - B - C
 
 **Usage:**
-- Over minor 7th chords
-- Creates bluesy feel with major 3rd
-- Common in bebop and hard bop
+- Use over minor 7th chords (Dm7)
+- The natural 3rd creates a chromatic approach to the 4th
+- Great for ii-V progressions in minor keys
+
+**Practice Tip:**
+Practice over the ii chord (Dm7) in a ii-V-i progression. The chromatic note helps connect smoothly to the V chord.
+
+---
+
+### Harmonic Minor Bebop Scale
+
+**Formula:** 1 2 ♭3 4 5 ♭6 6 7
+
+**Example in A minor:**
+A - B - C - D - E - F - F♯ - G♯
+
+**Usage:**
+- Exotic sound over minor chords
+- Strong resolution to tonic due to leading tone
+- Popular in minor ii-V-i progressions
 
 ---
 
 ## Modal Scales
 
 ### Dorian Mode
-The second mode of the major scale.
 
 **Formula:** 1 2 ♭3 4 5 6 ♭7
-**Example in D:** D E F G A B C
+
+**Example in D:**
+D - E - F - G - A - B - C
 
 **Usage:**
-- Perfect for minor 7th chords
-- Brighter than natural minor
-- Common in modal jazz
+- The go-to scale for minor 7th chords in jazz
+- Brighter sound than natural minor (due to major 6th)
+- Perfect for modal jazz (Miles Davis style)
 
-**Famous Examples:**
-- Miles Davis: "So What"
-- John Coltrane: "Impressions"
+**Characteristic Sound:**
+The major 6th gives Dorian its distinctive, hopeful minor quality.
 
-### Lydian Mode
-The fourth mode with raised 4th.
+**Practice Tip:**
+Practice over a Dm7 vamp. Emphasize the major 6th (B) to bring out the Dorian flavor.
 
-**Formula:** 1 2 3 ♯4 5 6 7
-**Example in F:** F G A B C D E
+**Famous Example:**
+Miles Davis - "So What" (entire melody is based on D Dorian)
 
-**Usage:**
-- Over major 7th chords
-- Creates ethereal, suspended sound
-- Common in modern jazz
+---
 
 ### Mixolydian Mode
-Major scale with flatted 7th.
 
 **Formula:** 1 2 3 4 5 6 ♭7
-**Example in G:** G A B C D E F
+
+**Example in G:**
+G - A - B - C - D - E - F
 
 **Usage:**
-- Dominant 7th chords
-- Blues and rock
-- Jazz-funk
+- Primary scale for dominant 7th chords
+- Major scale with flatted 7th
+- Common in modal jazz and blues
+
+**Practice Tip:**
+Play Mixolydian over a G7 vamp, avoiding the major 7th (F♯). Notice the relaxed, bluesy quality.
+
+**Famous Example:**
+"Impressions" by John Coltrane uses Mixolydian extensively.
+
+---
+
+### Lydian Mode
+
+**Formula:** 1 2 3 ♯4 5 6 7
+
+**Example in C:**
+C - D - E - F♯ - G - A - B
+
+**Usage:**
+- Beautiful over major 7th chords
+- The raised 4th avoids the "avoid note" of regular major scale
+- Creates dreamy, floating quality
+
+**Characteristic Sound:**
+The ♯4 gives Lydian its distinctive, bright, "open" sound.
+
+**Practice Tip:**
+Practice over Cmaj7, emphasizing the F♯. Notice how it creates tension without needing resolution.
+
+**Famous Example:**
+"Giant Steps" - Coltrane uses Lydian over the major chords for a modern sound.
+
+---
+
+### Lydian Dominant (Lydian ♭7)
+
+**Formula:** 1 2 3 ♯4 5 6 ♭7
+
+**Example in C:**
+C - D - E - F♯ - G - A - B♭
+
+**Usage:**
+- Exotic sound over dominant 7th chords
+- Common in Latin jazz
+- Alternative to Mixolydian
 
 ---
 
 ## Altered Scales
 
 ### Altered Scale (Super Locrian)
-7th mode of melodic minor.
 
 **Formula:** 1 ♭2 ♭3 ♭4 ♭5 ♭6 ♭7
-**Example in C:** C D♭ E♭ F♭ G♭ A♭ B♭
+
+**Example in G:**
+G - A♭ - B♭ - C♭ - D♭ - E♭ - F
 
 **Usage:**
-- Over altered dominant chords (7♯9, 7♭9, 7♯5, 7♭5)
-- Creates maximum tension
-- Resolution to tonic
+- Maximum tension on dominant 7th chords
+- Contains all altered tensions: ♭9, ♯9, ♯11, ♭13
+- Common in modern jazz and bebop
+- Perfect for G7alt resolving to Cmaj7
 
-**Practice:**
-- Start with dominant 7th arpeggios
-- Add alterations gradually
-- Resolve to major or minor chord
+**Think of it as:**
+The 7th mode of A♭ melodic minor
 
-### Half-Whole Diminished
-Symmetrical scale alternating half and whole steps.
+**Practice Tip:**
+Practice this over V7 chords in ii-V-I progressions. It creates maximum tension before resolving to I.
 
-**Formula:** 1 ♭2 ♯2 3 ♯4 5 6 ♭7
-**Example in C:** C D♭ E♭ E F# G A B♭
+**Famous Example:**
+John Coltrane's "Countdown" uses altered scales extensively.
+
+---
+
+### Half-Whole Diminished Scale
+
+**Formula:** H-W-H-W-H-W-H-W (Half step, Whole step pattern)
+
+**Example in C:**
+C - D♭ - E♭ - E - F♯ - G - A - B♭
 
 **Usage:**
-- Over diminished 7th chords
-- Creates tension and ambiguity
-- Common in bebop
+- Use over dominant 7♭9 chords (C7♭9)
+- Symmetrical scale (repeats every minor 3rd)
+- Contains both ♭9 and ♯9
+- Great for altered dominant sounds
+
+**Practice Tip:**
+This scale transposes every minor 3rd. C dim = E♭ dim = G♭ dim = A dim (same notes!)
+
+---
+
+### Whole-Half Diminished Scale
+
+**Formula:** W-H-W-H-W-H-W-H
+
+**Example in C:**
+C - D - E♭ - F - G♭ - A♭ - A - B
+
+**Usage:**
+- Use over diminished 7th chords (Cdim7)
+- Also symmetrical
+- Common in transitions
 
 ---
 
 ## Blues Scales
 
-### Blues Scale
-Minor pentatonic with added ♭5.
+### Minor Blues Scale
 
 **Formula:** 1 ♭3 4 ♭5 5 ♭7
-**Example in C:** C E♭ F G♭ G B♭
+
+**Example in C:**
+C - E♭ - F - G♭ - G - B♭
 
 **Usage:**
-- Essential for blues and jazz-blues
-- Works over all chords in blues progression
-- Bend notes for authentic sound
+- THE classic blues scale
+- Works over entire 12-bar blues
+- The ♭5 (blue note) is the characteristic sound
+- Can be used over major or minor blues
 
-### Major Blues Scale
-Major pentatonic with added ♭3.
+**Practice Tip:**
+Bend into the ♭5 from below. This is the essence of blues playing.
 
-**Formula:** 1 2 ♭3 3 5 6
-**Example in C:** C D E♭ E G A
-
-**Usage:**
-- Over major chords in blues
-- Mix with minor blues for variety
+**Famous Example:**
+B.B. King, Eric Clapton - virtually every blues solo
 
 ---
 
-## Practice Recommendations
+### Major Blues Scale
 
-### Daily Routine:
-1. **Warm-up (10 min):** Play scales slowly, focus on tone
-2. **Technique (15 min):** Scales in patterns (3rds, 4ths, sequences)
-3. **Application (20 min):** Improvise over backing tracks using scales
-4. **Transcription (15 min):** Learn how masters use scales
+**Formula:** 1 2 ♭3 3 5 6
 
-### Speed Building:
-- Start at 60 BPM
-- Increase by 5 BPM when comfortable
-- Don't sacrifice accuracy for speed
-- Use metronome always
+**Example in C:**
+C - D - E♭ - E - G - A
 
-### Key Areas:
-- Master scales in all 12 keys
-- Focus on circle of 5ths
-- Practice with ii-V-I progressions
-- Record yourself and listen critically
+**Usage:**
+- Brighter blues sound
+- Common in jazz-blues
+- Mix with minor blues scale for versatility
+
+**Practice Tip:**
+Alternate between minor and major blues scales over a 12-bar blues. This creates the classic jazz-blues sound.
+
+---
+
+## Scale Selection Guide
+
+### Over Chord Types:
+
+**Major 7th chords (Cmaj7):**
+- Lydian (first choice for modern sound)
+- Major scale
+- Major Bebop scale
+
+**Minor 7th chords (Dm7):**
+- Dorian (first choice)
+- Minor Bebop scale
+- Aeolian (natural minor)
+
+**Dominant 7th chords (G7):**
+- Mixolydian (traditional)
+- Dominant Bebop scale
+- Altered scale (for tension)
+- Half-Whole Diminished (G7♭9)
+- Whole Tone (G7♯5)
+
+**Minor 7♭5 chords (Bm7♭5):**
+- Locrian
+- Locrian ♮2
+
+---
+
+## Practice Routine
+
+### Daily Scale Practice (20 minutes):
+
+**Week 1-2: Bebop Scales**
+- Major Bebop in all 12 keys
+- Dominant Bebop in all 12 keys
+- Practice over ii-V-I progressions
+
+**Week 3-4: Modal Scales**
+- Dorian in all keys
+- Mixolydian in all keys
+- Lydian in all keys
+
+**Week 5-6: Altered Scales**
+- Altered scale over V7 chords
+- Half-Whole Diminished
+- Apply to ii-V-I progressions
+
+**Week 7-8: Blues Scales**
+- Minor Blues in all keys
+- Major Blues in all keys
+- Mix both over 12-bar blues
+
+---
+
+## Advanced Concepts
+
+### Scale Superimposition
+
+**Technique:** Play a scale from a different root over a chord.
+
+**Example:**
+Over Cmaj7, play D Dorian (D-E-F-G-A-B-C)
+- Creates tensions: 9, 11, 13
+- Modern jazz sound
+- Used by McCoy Tyner, Herbie Hancock
+
+### Chromatic Approach
+
+**Technique:** Approach any scale tone chromatically from above or below.
+
+**Example in C major:**
+Instead of C-D-E-F-G
+Play C-C♯-D-D♯-E-F-F♯-G
+
+**Used extensively in bebop!**
+
+---
+
+## Recommended Listening
+
+**For Bebop Scales:**
+- Charlie Parker - "Confirmation", "Anthropology"
+- Dizzy Gillespie - "Groovin' High", "A Night in Tunisia"
+
+**For Modal Playing:**
+- Miles Davis - "So What", "Flamenco Sketches"
+- John Coltrane - "Impressions"
+
+**For Altered Scales:**
+- John Coltrane - "Giant Steps", "Countdown"
+- Herbie Hancock - "Maiden Voyage"
+
+**For Blues:**
+- Charlie Parker - "Blues for Alice"
+- Wes Montgomery - "Four on Six"
+
+---
+
+## Summary: Scale Priority for Jazz
+
+**Absolute Must-Know:**
+1. Major Bebop Scale
+2. Dominant Bebop Scale
+3. Dorian Mode
+4. Mixolydian Mode
+5. Minor Blues Scale
+
+**Important:**
+6. Altered Scale
+7. Lydian Mode
+8. Minor Bebop Scale
+9. Major Blues Scale
+
+**Advanced:**
+10. Half-Whole Diminished
+11. Lydian Dominant
+12. Harmonic Minor scales
+
+---
+
+**Practice Tip:** Don't just memorize scale patterns. Learn them by:
+1. Singing them
+2. Playing them in all 12 keys
+3. Applying them to real tunes
+4. Listening to masters use them
+5. Transcribing solos that use specific scales
+
+---
+
+*This document is based on Open Music Theory (CC-BY-SA 4.0) and public domain jazz theory resources. Free for commercial use with attribution.*
