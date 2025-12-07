@@ -768,7 +768,7 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
         
         # Step 2: Basic Pitch Note Detection (only for short files to avoid timeout/memory)
         note_analysis = None
-        if audio_features['duration'] <= 60:  # Only for files <= 60 seconds
+        if False:  # DISABLED - Basic Pitch causing unpacking errors
             analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
             note_analysis = analyze_notes_with_basic_pitch(tmp_path)
             # Memory already freed inside function
