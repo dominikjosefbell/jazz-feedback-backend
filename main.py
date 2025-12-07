@@ -469,10 +469,12 @@ def analyze_notes_with_basic_pitch(audio_path: str) -> Dict:
         audio_data, sr = lb.load(audio_path, sr=22050, mono=True)  # Lower SR = less memory
         
         # Run Basic Pitch prediction with memory constraints
-        model_output, midi_data, note_events = predict(
-            audio_path,
-            ICASSP_2022_MODEL_PATH
-        )
+        # Basic Pitch predict() returns 3 or 4 values depending on version
+        result = predict(audio_path, ICASSP_2022_MODEL_PATH)
+        if len(result) == 4:
+            model_output, midi_data, note_events, _ = result
+        else:
+            model_output, midi_data, note_events = result
         
         # Process results immediately and free memory
         notes = []
