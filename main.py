@@ -602,7 +602,7 @@ NOTE DETECTION (Basic Pitch):
 - Vermutete Tonart: {note_analysis.get('detected_scale', 'unbekannt')}
 """
         
-prompt = f"""
+        prompt = f"""
 Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
 
 AUDIO-DATEN (Librosa-Analyse):
