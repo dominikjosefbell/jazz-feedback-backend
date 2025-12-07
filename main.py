@@ -575,8 +575,10 @@ async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_a
     
     try:
          # Get relevant jazz theory context
+        print("🔍 Attempting to load knowledge base...")
         try:
             kb = get_knowledge_base()
+            print("🔍 Knowledge base instance created")
             jazz_context = kb.get_context_for_analysis(
                 tempo=audio_features['tempo'],
                 tempo_category=jazz_analysis['tempo_category'],
@@ -584,7 +586,9 @@ async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_a
             )
             print(f"✅ Retrieved {len(jazz_context)} chars of jazz theory context")
         except Exception as e:
-            print(f"⚠️ Could not load knowledge base: {e}")
+            print(f"❌ Could not load knowledge base: {e}")
+            import traceback
+            traceback.print_exc()
             jazz_context = ""
         
         # Enhanced prompt with note information
