@@ -567,14 +567,14 @@ def detect_scale_simple(note_names: List[str]) -> Optional[str]:
 # ============================================================================
 
 async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_analysis: Dict) -> Dict:
-    """Nutzt Apertus AI für intelligentes Feedback (now with note data)"""
+    """Nutzt Apertus AI für intelligentes Feedback (now with note data + RAG)"""
     
     if not apertus_client:
         print("Apertus nicht verfügbar, fallback")
         return None
     
     try:
-         # Get relevant jazz theory context
+        # Get relevant jazz theory context
         print("🔍 Attempting to load knowledge base...")
         try:
             kb = get_knowledge_base()
@@ -664,7 +664,8 @@ Antworte NUR mit diesem JSON-Format (keine Markdown-Backticks):
   }}
 }}"""
         
-        print("🇨🇭 Calling Apertus API with RAG context...")        
+        print("🇨🇭 Calling Apertus API with RAG context...")
+        
         response = apertus_client.chat_completion(
             model="swiss-ai/Apertus-70B-Instruct-2509",
             messages=[{"role": "user", "content": prompt}],
