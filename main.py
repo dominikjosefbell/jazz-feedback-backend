@@ -12,10 +12,9 @@ import os
 from typing import Dict, List, Optional
 import json
 from knowledge_loader import get_knowledge_base
-import uuid
+from midi_analyzer import analyze_midi_file, analyze_voice_leadingimport uuid
 from datetime import datetime
 from huggingface_hub import InferenceClient
-# NOTE: basic_pitch imported only when needed to save memory
 
 app = FastAPI(title="Jazz Feedback API")
 
