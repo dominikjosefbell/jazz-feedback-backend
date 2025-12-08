@@ -469,14 +469,18 @@ def analyze_notes_with_basic_pitch(audio_path: str) -> Dict:
         audio_data, sr = lb.load(audio_path, sr=22050, mono=True)  # Lower SR = less memory
         
         # Run Basic Pitch prediction with memory constraints
-        try:
-            result = predict(audio_path, ICASSP_2022_MODEL_PATH)
-            model_output = result[0]
-            midi_data = result[1]
-            note_events = result[2]
-        except (IndexError, ValueError) as e:
-            print(f"Basic Pitch predict() error: {e}, result has {len(result)} values")
-            raise
+        # Run Basic Pitch prediction
+        result = predict(audio_path, ICASSP_2022_MODEL_PATH)
+
+        # FIXED: Handle both 3-tuple and 4-tuple returns
+        if len(result) == 3:
+            model_output, midi_data, note_events = result
+        elif len(result) == 4:
+            model_output, midi_data, note_events, _ = result  # 4th value is note activations
+        else:
+            raise ValueError(f"Unexpected result length: {len(result)}")
+
+print(f"✅ Basic Pitch returned {len(note_events)} note events")
         
         # Process results immediately and free memory
         notes = []
@@ -768,7 +772,7 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
         
         # Step 2: Basic Pitch Note Detection (only for short files to avoid timeout/memory)
         note_analysis = None
-        if False:  # DISABLED - Basic Pitch causing unpacking errors
+        if audio_features['duration'] <= 120:  # Only for files <= 2 minutes
             analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
             note_analysis = analyze_notes_with_basic_pitch(tmp_path)
             # Memory already freed inside function
