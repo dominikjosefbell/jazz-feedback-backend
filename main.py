@@ -12,7 +12,8 @@ import os
 from typing import Dict, List, Optional
 import json
 from knowledge_loader import get_knowledge_base
-from midi_analyzer import analyze_midi_file, analyze_voice_leadingimport uuid
+from midi_analyzer import analyze_midi_file, analyze_voice_leading
+import uuid
 from datetime import datetime
 from huggingface_hub import InferenceClient
 
