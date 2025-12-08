@@ -771,12 +771,8 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
         
         # Step 2: Basic Pitch Note Detection (only for short files to avoid timeout/memory)
         note_analysis = None
-        if audio_features['duration'] <= 120:  # Only for files <= 2 minutes
-            analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
-            note_analysis = analyze_notes_with_basic_pitch(tmp_path)
-            # Memory already freed inside function
-        else:
-            print(f"⏭️  Skipping Basic Pitch for {audio_features['duration']:.1f}s file (too long)")
+        analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
+        note_analysis = analyze_midi_file(tmp_path)
         
         # Free memory before AI call
         gc.collect()
@@ -842,8 +838,8 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
 
 @app.post("/analyze-async")
 async def analyze_audio_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    if not file.content_type.startswith('audio/'):
-        raise HTTPException(status_code=400, detail="Nur Audio-Dateien erlaubt")
+    if not (file.filename.endswith('.mid') or file.filename.endswith('.midi')):
+        raise HTTPException(status_code=400, detail="Nur MIDI-Dateien erlaubt (.mid, .midi)")
     
     analysis_id = str(uuid.uuid4())
     
