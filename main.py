@@ -37,10 +37,7 @@ def initialize_apertus():
     try:
         hf_token = os.environ.get("HF_TOKEN")
         if hf_token:
-            apertus_client = InferenceClient(
-                base_url="https://router.huggingface.co/v1",
-                api_key=hf_token
-            )
+            apertus_client = InferenceClient(token=hf_token)
             print("✅ Apertus API connected!")
         else:
             print("⚠️  HF_TOKEN not found - AI disabled")
