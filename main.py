@@ -79,13 +79,13 @@ HTML_TEMPLATE = """
         <div id="aiStatus" class="mb-6"></div>
 
         <div class="bg-white rounded-2xl shadow-lg p-8 mb-6">
-            <input type="file" id="fileInput" accept="audio/*" class="hidden">
+            <input type="file" id="fileInput" accept=".mid,.midi" class="hidden">
             <div id="dropzone" class="border-3 border-dashed border-red-300 rounded-xl p-12 text-center cursor-pointer hover:border-red-500 hover:bg-red-50 transition-all">
                 <svg class="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
                 <p class="text-lg font-semibold text-gray-700 mb-2" id="fileName">Audio-Datei hochladen</p>
-                <p class="text-sm text-gray-500">MP3, WAV, M4A - bis zu 5 Minuten</p>
+               <p class="text-sm text-gray-500">MIDI-Dateien (.mid, .midi)</p>
             </div>
 
             <div id="audioPlayerContainer" class="mt-6 hidden">
@@ -93,7 +93,7 @@ HTML_TEMPLATE = """
             </div>
 
             <button id="analyzeBtn" class="w-full mt-6 bg-red-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors hidden">
-                🎵 Analyse starten (mit Note-Detection)
+                🎵 MIDI Analyse starten
             </button>
         </div>
 
@@ -282,10 +282,13 @@ async def ai_status():
 # ============================================================================
 
 def analyze_audio_file(audio_path: str) -> Dict:
-    """Librosa audio analysis (Memory Optimized)"""
-    # Load with lower sample rate to save memory
-    y, sr = librosa.load(audio_path, sr=11025, duration=600, mono=True)
-    duration = librosa.get_duration(y=y, sr=sr)
+    """
+    Simplified: Only extract tempo from audio if needed
+    MIDI files already have tempo!
+    """
+    # For MIDI files, skip this completely
+    # Tempo comes from MIDI
+    return {"tempo": 120.0}  # Dummy, wird von MIDI überschrieben
     
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
     beat_times = librosa.frames_to_time(beats, sr=sr)
@@ -601,13 +604,23 @@ async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_a
         # Enhanced prompt with note information
         note_info = ""
         if note_analysis and note_analysis.get("total_notes", 0) > 0:
+            chord_info = ""
+            if note_analysis.get("chords"):
+                # Format first 5 chords nicely
+                chord_strs = []
+                for i, chord in enumerate(note_analysis["chords"][:5]):
+                    chord_strs.append(f"{chord['root']} {chord['type']}")
+                chord_info = f"\n- Erkannte Akkorde: {', '.join(chord_strs)}"
+    
             note_info = f"""
-NOTE DETECTION (Basic Pitch):
-- Erkannte Noten: {note_analysis['total_notes']}
-- Tonumfang: {note_analysis['pitch_range']['min_note']} bis {note_analysis['pitch_range']['max_note']}
-- Häufigste Noten: {', '.join(note_analysis['most_common_notes'][:5])}
-- Vermutete Tonart: {note_analysis.get('detected_scale', 'unbekannt')}
-"""
+        NOTE DETECTION (MIDI - 100% akkurat):
+        - Erkannte Noten: {note_analysis['total_notes']}
+        - Tonumfang: {note_analysis['pitch_range']['min_note']} bis {note_analysis['pitch_range']['max_note']}
+        - Häufigste Noten: {', '.join(note_analysis['most_common_notes'][:5])}
+        - Vermutete Tonart: {note_analysis.get('detected_scale', 'unbekannt')}{chord_info}
+        - Timing Precision: {note_analysis.get('timing', {}).get('precision_score', 0):.2%}
+        - Dynamic Range: {note_analysis.get('dynamics', {}).get('range', 0)} (velocity)
+        """
         
         prompt = f"""
 Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
