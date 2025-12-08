@@ -480,7 +480,7 @@ def analyze_notes_with_basic_pitch(audio_path: str) -> Dict:
         else:
             raise ValueError(f"Unexpected result length: {len(result)}")
 
-print(f"✅ Basic Pitch returned {len(note_events)} note events")
+        print(f"✅ Basic Pitch returned {len(note_events)} note events")
         
         # Process results immediately and free memory
         notes = []
