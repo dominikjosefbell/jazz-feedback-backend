@@ -26,3 +26,5 @@ markdown==3.5.2
 
 # Utilities
 python-dotenv==1.0.1
+
+python-multipart==0.0.6
