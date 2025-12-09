@@ -8,6 +8,12 @@ from typing import Dict, List, Tuple
 from collections import Counter, defaultdict
 import numpy as np
 
+def midi_to_note_name(midi_number: int) -> str:
+    """Convert MIDI note number to note name (e.g., 60 -> 'C4')"""
+    note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    octave = (midi_number // 12) - 1
+    note = note_names[midi_number % 12]
+    return f"{note}{octave}"
 
 def analyze_midi_file(midi_path: str) -> Dict:
     """
@@ -70,8 +76,8 @@ def analyze_midi_file(midi_path: str) -> Dict:
             "pitch_range": {
                 "min": min_pitch,
                 "max": max_pitch,
-                "min_note": mido.note_name(min_pitch),
-                "max_note": mido.note_name(max_pitch)
+                "min_note": midi_to_note_name(min_pitch),
+                "max_note": midi_to_note_name(max_pitch)
             },
             "most_common_notes": [note for note, count in most_common],
             "detected_scale": detected_scale,
@@ -133,7 +139,7 @@ def extract_notes(mid: mido.MidiFile) -> List[Dict]:
                     note_data = active_notes[msg.note]
                     notes.append({
                         'pitch': msg.note,
-                        'note_name': mido.note_name(msg.note),
+                        'note_name': midi_to_note_name(msg.note),
                         'start': note_data['start'],
                         'end': track_time,
                         'duration': track_time - note_data['start'],
@@ -194,7 +200,7 @@ def analyze_chord(chord: List[Dict]) -> Dict:
     """
     # Sort notes by pitch
     pitches = sorted([n['pitch'] for n in chord])
-    note_names = [mido.note_name(p) for p in pitches]
+    note_names = [midi_to_note_name(p) for p in pitches]
     
     # Root is lowest note
     root_pitch = pitches[0]
