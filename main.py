@@ -1,12 +1,10 @@
-# Jazz Improvisation Feedback Platform - WITH BASIC PITCH (MEMORY OPTIMIZED)
-# FastAPI + Librosa + Basic Pitch + Apertus AI
+# Jazz Improvisation Feedback Platform - MIDI VERSION
+# FastAPI + MIDI Analysis + Apertus AI + RAG
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-import librosa
 import numpy as np
-from scipy import signal
 import tempfile
 import os
 from typing import Dict, List, Optional
@@ -17,7 +15,7 @@ import uuid
 from datetime import datetime
 from huggingface_hub import InferenceClient
 
-app = FastAPI(title="Jazz Feedback API")
+app = FastAPI(title="Jazz Feedback API - MIDI")
 
 # CORS
 app.add_middleware(
@@ -50,7 +48,7 @@ initialize_apertus()
 analysis_results = {}
 
 # ============================================================================
-# WEB UI (unchanged, just note the new features in status)
+# WEB UI
 # ============================================================================
 
 HTML_TEMPLATE = """
@@ -59,7 +57,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jazz Feedback - Apertus AI + Basic Pitch</title>
+    <title>Jazz Feedback - MIDI Analyse</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gradient-to-br from-red-50 via-white to-white min-h-screen">
@@ -71,7 +69,7 @@ HTML_TEMPLATE = """
                 </svg>
             </div>
             <h1 class="text-4xl font-bold text-gray-900 mb-2">Jazz-Improvisation Feedback</h1>
-            <p class="text-gray-600">🇨🇭 Apertus AI + 🎹 Basic Pitch Note Detection</p>
+            <p class="text-gray-600">🇨🇭 Apertus AI + 🎹 MIDI Analyse</p>
         </div>
 
         <div id="aiStatus" class="mb-6"></div>
@@ -82,12 +80,8 @@ HTML_TEMPLATE = """
                 <svg class="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
-                <p class="text-lg font-semibold text-gray-700 mb-2" id="fileName">Audio-Datei hochladen</p>
-               <p class="text-sm text-gray-500">MIDI-Dateien (.mid, .midi)</p>
-            </div>
-
-            <div id="audioPlayerContainer" class="mt-6 hidden">
-                <audio id="audioPlayer" controls class="w-full"></audio>
+                <p class="text-lg font-semibold text-gray-700 mb-2" id="fileName">MIDI-Datei hochladen</p>
+                <p class="text-sm text-gray-500">MIDI-Dateien (.mid, .midi)</p>
             </div>
 
             <button id="analyzeBtn" class="w-full mt-6 bg-red-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors hidden">
@@ -117,9 +111,9 @@ HTML_TEMPLATE = """
             .then(data => {
                 const statusDiv = document.getElementById('aiStatus');
                 if (data.ai_enabled) {
-                    statusDiv.innerHTML = '<div class="bg-gradient-to-r from-red-50 to-white border border-red-200 rounded-xl p-4"><div class="flex items-center gap-3"><svg class="w-8 h-8 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg><div><div class="text-sm font-medium text-red-900">🇨🇭 Apertus AI + 🎹 Basic Pitch aktiv</div><div class="text-xs text-red-700">Note Detection & Swiss AI Feedback</div></div></div></div>';
+                    statusDiv.innerHTML = '<div class="bg-gradient-to-r from-red-50 to-white border border-red-200 rounded-xl p-4"><div class="flex items-center gap-3"><svg class="w-8 h-8 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg><div><div class="text-sm font-medium text-red-900">🇨🇭 Apertus AI + 🎹 MIDI Analyse aktiv</div><div class="text-xs text-red-700">Akkord-Erkennung & Swiss AI Feedback</div></div></div></div>';
                 } else {
-                    statusDiv.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4"><span class="text-sm font-medium text-yellow-900">⚠️ AI deaktiviert - Nutze regel-basiertes Feedback (Note Detection aktiv)</span></div>';
+                    statusDiv.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4"><span class="text-sm font-medium text-yellow-900">⚠️ AI deaktiviert - Nutze regel-basiertes Feedback</span></div>';
                 }
             });
 
@@ -129,12 +123,12 @@ HTML_TEMPLATE = """
 
         document.getElementById('fileInput').addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file && file.type.startsWith('audio/')) {
+            if (file && (file.name.endsWith('.mid') || file.name.endsWith('.midi'))) {
                 selectedFile = file;
                 document.getElementById('fileName').textContent = file.name;
-                document.getElementById('audioPlayer').src = URL.createObjectURL(file);
-                document.getElementById('audioPlayerContainer').classList.remove('hidden');
                 document.getElementById('analyzeBtn').classList.remove('hidden');
+            } else {
+                alert('Bitte eine MIDI-Datei (.mid oder .midi) auswählen');
             }
         });
 
@@ -158,7 +152,7 @@ HTML_TEMPLATE = """
                 const data = await response.json();
                 analysisId = data.analysis_id;
 
-                document.getElementById('loadingText').textContent = 'Analysiere Audio...';
+                document.getElementById('loadingText').textContent = 'Analysiere MIDI...';
                 document.getElementById('progressBar').style.width = '20%';
 
                 pollForResults(analysisId);
@@ -170,7 +164,7 @@ HTML_TEMPLATE = """
         });
 
         async function pollForResults(id) {
-            const maxAttempts = 60; // 60 attempts × 5 seconds = 5 minutes
+            const maxAttempts = 60;
             let attempts = 0;
 
             const interval = setInterval(async () => {
@@ -191,10 +185,8 @@ HTML_TEMPLATE = """
                         const progress = 20 + (attempts / maxAttempts) * 70;
                         document.getElementById('progressBar').style.width = progress + '%';
                         
-                        if (data.stage === 'librosa') {
-                            document.getElementById('loadingText').textContent = '🎵 Librosa Analyse...';
-                        } else if (data.stage === 'notes') {
-                            document.getElementById('loadingText').textContent = '🎹 Note Detection (kann bis zu 2 Min dauern)...';
+                        if (data.stage === 'notes') {
+                            document.getElementById('loadingText').textContent = '🎹 MIDI Analyse...';
                         } else if (data.stage === 'ai') {
                             document.getElementById('loadingText').textContent = '🇨🇭 Apertus AI Feedback...';
                         }
@@ -206,128 +198,113 @@ HTML_TEMPLATE = """
 
                     if (attempts >= maxAttempts) {
                         clearInterval(interval);
-                        alert('Timeout: Analyse dauert zu lange. Bitte versuche eine kürzere Audio-Datei oder warte noch etwas und lade die Seite neu.');
+                        alert('Timeout: Analyse dauert zu lange.');
                         document.getElementById('loading').classList.add('hidden');
                     }
                 } catch (error) {
                     console.error('Poll error:', error);
                 }
-            }, 5000); // Check every 5 seconds instead of 2
+            }, 3000);
         }
 
-        import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+        function displayResults(data) {
+            const getScoreColor = (score) => score >= 8 ? 'green' : score >= 6 ? 'yellow' : 'orange';
+            let html = '';
 
-// Import translations - correct path from contexts folder
-import translations from '../translations.json';
+            if (data.ai_generated) {
+                html += '<div class="bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl p-4 mb-6"><div class="flex items-center gap-2"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M13 7H7v6h6V7z"/></svg><span class="font-semibold">🇨🇭 Feedback von Apertus AI</span></div></div>';
+            }
 
-type Language = 'de' | 'en';
+            // NOTE DETECTION
+            if (data.note_analysis && data.note_analysis.total_notes > 0) {
+                html += '<div class="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6 mb-4">';
+                html += '<h3 class="font-semibold text-purple-900 mb-4">🎹 Note Detection</h3>';
+                html += '<div class="grid grid-cols-2 gap-4 text-sm">';
+                html += '<div><strong>Erkannte Noten:</strong> ' + data.note_analysis.total_notes + '</div>';
+                html += '<div><strong>Tonumfang:</strong> ' + data.note_analysis.pitch_range.min_note + ' - ' + data.note_analysis.pitch_range.max_note + '</div>';
+                html += '<div><strong>Häufigste Noten:</strong> ' + data.note_analysis.most_common_notes.join(', ') + '</div>';
+                html += '<div><strong>Erkannte Tonart:</strong> ' + (data.note_analysis.detected_scale || 'unbekannt') + '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
 
-interface LanguageContextType {
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
-}
+            // CHORD DETECTION
+            if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
+                html += '<div class="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-6 mb-4">';
+                html += '<h3 class="font-semibold text-blue-900 mb-4">🎼 Erkannte Akkorde</h3>';
+                html += '<div class="flex flex-wrap gap-3 mb-4 items-center">';
+                data.note_analysis.chords.forEach((chord, index) => {
+                    const isMinor = chord.type && chord.type.includes('m') && !chord.type.includes('maj');
+                    const bgColor = isMinor ? 'bg-indigo-100 border-indigo-300' : 'bg-blue-100 border-blue-300';
+                    html += '<div class="' + bgColor + ' border-2 rounded-xl px-4 py-3 text-center shadow-sm">';
+                    html += '<div class="font-bold text-xl text-gray-800">' + chord.symbol + '</div>';
+                    html += '<div class="text-sm text-gray-600 mt-1">' + chord.notes.join(' · ') + '</div>';
+                    html += '<div class="text-xs text-gray-400 mt-1">' + chord.start_time.toFixed(2) + 's</div>';
+                    html += '</div>';
+                    if (index < data.note_analysis.chords.length - 1) {
+                        html += '<div class="text-gray-400 text-2xl">→</div>';
+                    }
+                });
+                html += '</div>';
+                if (data.note_analysis.progression) {
+                    html += '<div class="bg-white/60 rounded-lg p-4 mt-3">';
+                    html += '<p class="font-semibold text-blue-800">' + data.note_analysis.progression.analysis + '</p>';
+                    if (data.note_analysis.progression.roman_numerals && data.note_analysis.progression.roman_numerals.length > 0) {
+                        html += '<p class="text-sm text-blue-600 mt-2"><strong>Roman Numerals:</strong> ' + data.note_analysis.progression.roman_numerals.join(' → ') + '</p>';
+                    }
+                    if (data.note_analysis.progression.type && data.note_analysis.progression.type !== 'Custom') {
+                        html += '<p class="text-sm text-green-600 mt-1">✓ Erkannt als: <strong>' + data.note_analysis.progression.type + '</strong></p>';
+                    }
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+            // NOTES TIMELINE
+            if (data.note_analysis && data.note_analysis.notes && data.note_analysis.notes.length > 0) {
+                html += '<div class="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6 mb-4">';
+                html += '<h3 class="font-semibold text-green-900 mb-4">🎵 Noten-Sequenz</h3>';
+                html += '<div class="flex flex-wrap gap-1">';
+                const notesToShow = data.note_analysis.notes.slice(0, 40);
+                notesToShow.forEach((note, idx) => {
+                    const velocity = Math.round((note.velocity / 127) * 100);
+                    const opacity = 0.4 + (velocity / 100) * 0.6;
+                    html += '<div class="bg-green-500 text-white text-xs px-2 py-1 rounded" style="opacity: ' + opacity + '" title="Velocity: ' + velocity + '%">';
+                    html += note.note_name;
+                    html += '</div>';
+                });
+                if (data.note_analysis.notes.length > 40) {
+                    html += '<div class="text-gray-400 text-sm px-2 py-1">... +' + (data.note_analysis.notes.length - 40) + ' weitere</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
 
-interface LanguageProviderProps {
-  children: ReactNode;
-}
+            // JAZZ CONTEXT
+            html += '<div class="bg-gradient-to-br from-red-50 to-pink-50 border border-red-200 rounded-xl p-6 mb-4"><h3 class="font-semibold text-red-900 mb-4">🎷 Jazz-Kontext</h3><div class="space-y-2 text-sm"><p><strong>Tempo:</strong> ' + data.jazz_analysis.tempo_category + '</p><p class="text-red-700">' + data.jazz_analysis.tempo_reference + '</p><p><strong>Rhythmik:</strong> ' + data.jazz_analysis.rhythm_assessment + '</p><p><strong>Dichte:</strong> ' + data.jazz_analysis.density_assessment + '</p><p><strong>Swing:</strong> ' + data.jazz_analysis.swing_feel + '</p><p><strong>Ähnlich:</strong> ' + data.jazz_analysis.similar_artists.join(', ') + '</p></div></div>';
 
-export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('de');
+            // MESSWERTE
+            html += '<div class="bg-slate-50 border border-slate-200 rounded-xl p-6 mb-4"><h3 class="font-semibold text-slate-900 mb-4">📊 Messwerte</h3><div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm"><div><p class="text-slate-600">Dauer</p><p class="font-mono font-bold">' + data.audio_features.duration.toFixed(1) + 's</p></div><div><p class="text-slate-600">Tempo</p><p class="font-mono font-bold">' + data.audio_features.tempo.toFixed(1) + ' BPM</p></div><div><p class="text-slate-600">Stabilität</p><p class="font-mono font-bold">' + (data.audio_features.tempo_stability * 100).toFixed(0) + '%</p></div><div><p class="text-slate-600">Noten-Dichte</p><p class="font-mono font-bold">' + data.audio_features.note_density.toFixed(2) + '/s</p></div><div><p class="text-slate-600">Dynamik</p><p class="font-mono font-bold">' + data.audio_features.dynamics.dynamic_range.toFixed(1) + 'x</p></div><div><p class="text-slate-600">Komplexität</p><p class="font-mono font-bold">' + data.audio_features.rhythm_complexity.toFixed(1) + '/10</p></div></div></div>';
 
-  // Detect browser language on mount
-  useEffect(() => {
-    const browserLang = navigator.language.split('-')[0];
-    const savedLang = localStorage.getItem('huntsense_language') as Language;
-    
-    if (savedLang && (savedLang === 'de' || savedLang === 'en')) {
-      setLanguage(savedLang);
-    } else if (browserLang === 'en') {
-      setLanguage('en');
-    } else {
-      setLanguage('de'); // Default to German
-    }
-  }, []);
+            // GESAMTBEWERTUNG
+            const color = getScoreColor(data.overall_score);
+            html += '<div class="bg-white rounded-2xl shadow-lg p-8 text-center mb-4"><h2 class="text-2xl font-bold mb-4">Gesamtbewertung</h2><div class="text-6xl font-bold text-' + color + '-600 mb-2">' + data.overall_score + '<span class="text-3xl text-gray-400">/10</span></div></div>';
 
-  // Save language preference
-  const handleSetLanguage = (lang: Language) => {
-    setLanguage(lang);
-    localStorage.setItem('huntsense_language', lang);
-  };
+            // FEEDBACK CATEGORIES
+            const categories = [
+                { title: 'Rhythmus & Timing', data: data.feedback.rhythm },
+                { title: 'Harmonie', data: data.feedback.harmony },
+                { title: 'Melodie & Phrasierung', data: data.feedback.melody },
+                { title: 'Artikulation & Dynamik', data: data.feedback.articulation }
+            ];
 
-  // Translation function
-  const t = (key: string): string => {
-    const keys = key.split('.');
-    let value: any = (translations as any)[language];
-    
-    for (const k of keys) {
-      if (value && typeof value === 'object' && k in value) {
-        value = value[k];
-      } else {
-        console.warn(`Translation not found: ${key}`);
-        return key;
-      }
-    }
-    
-    return typeof value === 'string' ? value : key;
-  };
+            categories.forEach(cat => {
+                const catColor = getScoreColor(cat.data.score);
+                html += '<div class="bg-white rounded-2xl shadow-lg p-6 mb-4"><div class="flex items-center justify-between mb-2"><h3 class="text-xl font-bold">' + cat.title + '</h3><span class="text-2xl font-bold text-' + catColor + '-600">' + cat.data.score.toFixed(1) + '</span></div><p class="text-gray-700 mb-3">' + cat.data.feedback + '</p><div class="bg-gray-50 rounded-lg p-4"><p class="font-semibold mb-2">Tipps:</p><ul class="space-y-1">' + cat.data.tips.map(tip => '<li class="text-sm text-gray-600">• ' + tip + '</li>').join('') + '</ul></div></div>';
+            });
 
-  return (
-    <LanguageContext.Provider value={{ language, setLanguage: handleSetLanguage, t }}>
-      {children}
-    </LanguageContext.Provider>
-  );
-};
-
-export const useLanguage = (): LanguageContextType => {
-  const context = useContext(LanguageContext);
-  if (!context) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
-  }
-  return context;
-};
-
-// Language Switcher Component
-export const LanguageSwitcher: React.FC = () => {
-  const { language, setLanguage } = useLanguage();
-
-  return (
-    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-      <button
-        onClick={() => setLanguage('de')}
-        style={{
-          padding: '6px 12px',
-          border: language === 'de' ? '2px solid #1F4788' : '1px solid #ccc',
-          borderRadius: '4px',
-          backgroundColor: language === 'de' ? '#1F4788' : 'white',
-          color: language === 'de' ? 'white' : '#333',
-          cursor: 'pointer',
-          fontWeight: language === 'de' ? 'bold' : 'normal',
-          fontSize: '14px'
-        }}
-      >
-        🇩🇪 DE
-      </button>
-      <button
-        onClick={() => setLanguage('en')}
-        style={{
-          padding: '6px 12px',
-          border: language === 'en' ? '2px solid #1F4788' : '1px solid #ccc',
-          borderRadius: '4px',
-          backgroundColor: language === 'en' ? '#1F4788' : 'white',
-          color: language === 'en' ? 'white' : '#333',
-          cursor: 'pointer',
-          fontWeight: language === 'en' ? 'bold' : 'normal',
-          fontSize: '14px'
-        }}
-      >
-        🇬🇧 EN
-      </button>
-    </div>
-  );
-};
+            document.getElementById('results').innerHTML = html;
+        }
     </script>
 </body>
 </html>
@@ -343,133 +320,18 @@ async def ai_status():
     return {
         "ai_enabled": apertus_client is not None,
         "model": "swiss-ai/Apertus-70B-Instruct-2509" if apertus_client else None,
-        "note_detection": "Basic Pitch (Spotify)"
+        "note_detection": "MIDI Analysis"
     }
 
 
 # ============================================================================
-# AUDIO ANALYSIS (Librosa - unchanged)
+# JAZZ PATTERN ANALYSIS
 # ============================================================================
-
-def analyze_audio_file(audio_path: str) -> Dict:
-    """
-    Simplified: Only extract tempo from audio if needed
-    MIDI files already have tempo!
-    """
-    # For MIDI files, skip this completely
-    # Tempo comes from MIDI
-    return {"tempo": 120.0}  # Dummy, wird von MIDI überschrieben
-    
-    tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
-    beat_times = librosa.frames_to_time(beats, sr=sr)
-    tempo_stability = calculate_tempo_stability(beat_times)
-    
-    # Free beat data immediately
-    del beats
-    
-    pitches, magnitudes = librosa.piptrack(y=y, sr=sr, n_fft=1024)  # Smaller FFT
-    pitch_sequence = extract_pitch_sequence(pitches, magnitudes)
-    
-    # Free pitch data
-    del pitches
-    del magnitudes
-    
-    harmonic, percussive = librosa.effects.hpss(y)
-    chroma = librosa.feature.chroma_cqt(y=harmonic, sr=sr, n_chroma=12, n_octaves=5)  # Reduce octaves
-    
-    # Free HPSS data
-    del harmonic
-    del percussive
-    
-    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-    onsets = librosa.onset.onset_detect(y=y, sr=sr, units='time')
-    rhythm_complexity = calculate_rhythm_complexity(onsets)
-    
-    # Free onset data
-    del onset_env
-    
-    rms = librosa.feature.rms(y=y, frame_length=1024, hop_length=512)[0]  # Smaller frames
-    dynamic_range = float(np.max(rms) / (np.mean(rms) + 1e-6))
-    dynamic_variance = float(np.std(rms))
-    
-    # Free RMS
-    del rms
-    
-    spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr, n_fft=1024)[0]
-    spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr, n_fft=1024)[0]
-    spectral_flatness = librosa.feature.spectral_flatness(y=y, n_fft=1024)[0]
-    
-    result = {
-        "duration": float(duration),
-        "tempo": float(tempo),
-        "tempo_stability": tempo_stability,
-        "beats": len(beat_times),
-        "onsets": len(onsets),
-        "note_density": len(onsets) / duration,
-        "pitch_range": {
-            "min": float(np.min(pitch_sequence[pitch_sequence > 0])) if len(pitch_sequence[pitch_sequence > 0]) > 0 else 0,
-            "max": float(np.max(pitch_sequence)),
-            "mean": float(np.mean(pitch_sequence[pitch_sequence > 0])) if len(pitch_sequence[pitch_sequence > 0]) > 0 else 0
-        },
-        "dynamics": {
-            "mean_rms": float(np.mean([dynamic_range])),
-            "max_rms": float(dynamic_range),
-            "dynamic_range": dynamic_range,
-            "variance": dynamic_variance
-        },
-        "spectral": {
-            "centroid_mean": float(np.mean(spectral_centroids)),
-            "centroid_std": float(np.std(spectral_centroids)),
-            "rolloff_mean": float(np.mean(spectral_rolloff)),
-            "flatness_mean": float(np.mean(spectral_flatness))
-        },
-        "rhythm_complexity": rhythm_complexity,
-        "harmonic_content": float(np.mean(chroma))
-    }
-    
-    # Free all remaining arrays
-    del y
-    del beat_times
-    del pitch_sequence
-    del chroma
-    del onsets
-    del spectral_centroids
-    del spectral_rolloff
-    del spectral_flatness
-    
-    return result
-
-
-def calculate_tempo_stability(beat_times: np.ndarray) -> float:
-    if len(beat_times) < 3:
-        return 0.5
-    intervals = np.diff(beat_times)
-    stability = 1.0 - (np.std(intervals) / (np.mean(intervals) + 1e-6))
-    return float(np.clip(stability, 0, 1))
-
-
-def extract_pitch_sequence(pitches: np.ndarray, magnitudes: np.ndarray) -> np.ndarray:
-    pitch_sequence = []
-    for t in range(pitches.shape[1]):
-        index = magnitudes[:, t].argmax()
-        pitch = pitches[index, t]
-        if pitch > 0:
-            pitch_sequence.append(pitch)
-    return np.array(pitch_sequence)
-
-
-def calculate_rhythm_complexity(onsets: np.ndarray) -> float:
-    if len(onsets) < 3:
-        return 1.0
-    intervals = np.diff(onsets)
-    complexity = np.std(intervals) / (np.mean(intervals) + 1e-6)
-    return float(np.clip(complexity * 5, 0, 10))
-
 
 def analyze_jazz_patterns(audio_features: Dict) -> Dict:
-    tempo = audio_features["tempo"]
-    rhythm_complexity = audio_features["rhythm_complexity"]
-    note_density = audio_features["note_density"]
+    tempo = audio_features.get("tempo", 120)
+    rhythm_complexity = audio_features.get("rhythm_complexity", 5)
+    note_density = audio_features.get("note_density", 2)
     
     if 60 <= tempo < 100:
         tempo_category = "Ballad"
@@ -519,135 +381,11 @@ def analyze_jazz_patterns(audio_features: Dict) -> Dict:
 
 
 # ============================================================================
-# NOTE DETECTION (Basic Pitch - Memory Optimized)
-# ============================================================================
-
-def analyze_notes_with_basic_pitch(audio_path: str) -> Dict:
-    """
-    Use Basic Pitch to extract notes from audio
-    MEMORY OPTIMIZED: Loads model only when needed, cleans up after
-    """
-    import gc
-    
-    try:
-        print("🎹 Running Basic Pitch note detection (memory optimized)...")
-        
-        # Import only when needed (lazy loading)
-        from basic_pitch.inference import predict
-        from basic_pitch import ICASSP_2022_MODEL_PATH
-        
-        # Load audio with lower sample rate to save memory
-        import librosa as lb
-        audio_data, sr = lb.load(audio_path, sr=22050, mono=True)  # Lower SR = less memory
-        
-        # Run Basic Pitch prediction with memory constraints
-        # Run Basic Pitch prediction
-        result = predict(audio_path, ICASSP_2022_MODEL_PATH)
-
-        # FIXED: Handle both 3-tuple and 4-tuple returns
-        if len(result) == 3:
-            model_output, midi_data, note_events = result
-        elif len(result) == 4:
-            model_output, midi_data, note_events, _ = result  # 4th value is note activations
-        else:
-            raise ValueError(f"Unexpected result length: {len(result)}")
-
-        print(f"✅ Basic Pitch returned {len(note_events)} note events")
-        
-        # Process results immediately and free memory
-        notes = []
-        for start_time, end_time, pitch, amplitude in note_events[:200]:  # Limit to 200 notes
-            note_name = lb.midi_to_note(int(pitch))
-            notes.append({
-                "start": float(start_time),
-                "end": float(end_time),
-                "pitch": int(pitch),
-                "note": note_name,
-                "amplitude": float(amplitude)
-            })
-        
-        # Extract statistics
-        pitches = [n["pitch"] for n in notes]
-        note_names = [n["note"] for n in notes]
-        
-        # Most common notes
-        from collections import Counter
-        note_counter = Counter(note_names)
-        most_common = note_counter.most_common(5)
-        
-        # Pitch range
-        min_pitch = min(pitches) if pitches else 0
-        max_pitch = max(pitches) if pitches else 0
-        
-        # Simple scale detection
-        detected_scale = detect_scale_simple(note_names)
-        
-        result = {
-            "total_notes": len(note_events),
-            "notes": notes[:50],  # Only return first 50 to save memory
-            "pitch_range": {
-                "min": min_pitch,
-                "max": max_pitch,
-                "min_note": lb.midi_to_note(min_pitch) if min_pitch > 0 else "N/A",
-                "max_note": lb.midi_to_note(max_pitch) if max_pitch > 0 else "N/A"
-            },
-            "most_common_notes": [note for note, count in most_common],
-            "detected_scale": detected_scale
-        }
-        
-        # CRITICAL: Free memory immediately
-        del model_output
-        del midi_data
-        del note_events
-        del audio_data
-        del notes
-        del pitches
-        del note_names
-        gc.collect()
-        
-        print("✅ Basic Pitch completed, memory freed")
-        return result
-        
-    except Exception as e:
-        print(f"Basic Pitch error: {e}")
-        # Clean up on error too
-        gc.collect()
-        return {
-            "total_notes": 0,
-            "error": str(e)
-        }
-
-
-def detect_scale_simple(note_names: List[str]) -> Optional[str]:
-    """
-    Simple scale detection based on note frequency
-    Returns likely key/scale
-    """
-    if not note_names:
-        return None
-    
-    # Count note occurrences (ignore octaves)
-    from collections import Counter
-    notes_no_octave = [n[:-1] if len(n) > 1 else n for n in note_names]
-    counter = Counter(notes_no_octave)
-    
-    # Most common note is likely tonic
-    most_common = counter.most_common(3)
-    if most_common:
-        tonic = most_common[0][0]
-        # Simple heuristic: check if major or minor
-        # This is very basic - real scale detection is more complex
-        return f"{tonic} (vermutlich)"
-    
-    return None
-
-
-# ============================================================================
-# APERTUS AI FEEDBACK (Enhanced with note data)
+# APERTUS AI FEEDBACK
 # ============================================================================
 
 async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_analysis: Dict) -> Dict:
-    """Nutzt Apertus AI für intelligentes Feedback (now with note data + RAG)"""
+    """Nutzt Apertus AI für intelligentes Feedback"""
     
     if not apertus_client:
         print("Apertus nicht verfügbar, fallback")
@@ -658,51 +396,49 @@ async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_a
         print("🔍 Attempting to load knowledge base...")
         try:
             kb = get_knowledge_base()
-            print("🔍 Knowledge base instance created")
             jazz_context = kb.get_context_for_analysis(
-                tempo=audio_features['tempo'],
+                tempo=audio_features.get('tempo', 120),
                 tempo_category=jazz_analysis['tempo_category'],
-                rhythm_complexity=audio_features['rhythm_complexity']
+                rhythm_complexity=audio_features.get('rhythm_complexity', 5)
             )
             print(f"✅ Retrieved {len(jazz_context)} chars of jazz theory context")
         except Exception as e:
             print(f"❌ Could not load knowledge base: {e}")
-            import traceback
-            traceback.print_exc()
             jazz_context = ""
         
-        # Enhanced prompt with note information
+        # Build chord info for prompt
+        chord_info = ""
+        if note_analysis and note_analysis.get("chords"):
+            chord_symbols = [c.get('symbol', '?') for c in note_analysis['chords'][:10]]
+            chord_info = f"\n- Erkannte Akkorde: {' → '.join(chord_symbols)}"
+            
+            if note_analysis.get('progression'):
+                prog = note_analysis['progression']
+                if prog.get('type') and prog['type'] != 'Custom':
+                    chord_info += f"\n- Progression: {prog['type']}"
+                if prog.get('roman_numerals'):
+                    chord_info += f"\n- Roman Numerals: {' → '.join(prog['roman_numerals'][:10])}"
+        
+        # Enhanced prompt with MIDI information
         note_info = ""
         if note_analysis and note_analysis.get("total_notes", 0) > 0:
-            chord_info = ""
-            if note_analysis.get("chords"):
-                # Format first 5 chords nicely
-                chord_strs = []
-                for i, chord in enumerate(note_analysis["chords"][:5]):
-                    chord_strs.append(f"{chord['root']} {chord['type']}")
-                chord_info = f"\n- Erkannte Akkorde: {', '.join(chord_strs)}"
-    
             note_info = f"""
-        NOTE DETECTION (MIDI - 100% akkurat):
-        - Erkannte Noten: {note_analysis['total_notes']}
-        - Tonumfang: {note_analysis['pitch_range']['min_note']} bis {note_analysis['pitch_range']['max_note']}
-        - Häufigste Noten: {', '.join(note_analysis['most_common_notes'][:5])}
-        - Vermutete Tonart: {note_analysis.get('detected_scale', 'unbekannt')}{chord_info}
-        - Timing Precision: {note_analysis.get('timing', {}).get('precision_score', 0):.2%}
-        - Dynamic Range: {note_analysis.get('dynamics', {}).get('range', 0)} (velocity)
-        """
+MIDI ANALYSE (100% akkurat):
+- Erkannte Noten: {note_analysis['total_notes']}
+- Tonumfang: {note_analysis['pitch_range']['min_note']} bis {note_analysis['pitch_range']['max_note']}
+- Häufigste Noten: {', '.join(note_analysis['most_common_notes'][:5])}
+- Erkannte Tonart: {note_analysis.get('detected_scale', 'unbekannt')}{chord_info}
+- Timing Precision: {note_analysis.get('timing', {}).get('precision_score', 0):.1%}
+- Dynamic Range: {note_analysis.get('dynamics', {}).get('range', 0)} (velocity)
+"""
         
         prompt = f"""
 Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
 
-AUDIO-DATEN (Librosa-Analyse):
-- Dauer: {audio_features['duration']:.1f} Sekunden
-- Tempo: {audio_features['tempo']:.1f} BPM
-- Tempo-Stabilität: {audio_features['tempo_stability']:.1%}
-- Noten-Dichte: {audio_features['note_density']:.2f} Noten/Sekunde
-- Rhythmische Komplexität: {audio_features['rhythm_complexity']:.1f}/10
-- Dynamik-Range: {audio_features['dynamics']['dynamic_range']:.1f}x
-- Spektraler Centroid: {audio_features['spectral']['centroid_mean']:.0f} Hz
+MIDI-DATEN:
+- Dauer: {audio_features.get('duration', 0):.1f} Sekunden
+- Tempo: {audio_features.get('tempo', 120):.1f} BPM
+- Noten-Dichte: {audio_features.get('note_density', 0):.2f} Noten/Sekunde
 
 {note_info}
 
@@ -711,35 +447,30 @@ JAZZ-KONTEXT:
 - Referenz: {jazz_analysis['tempo_reference']}
 - Rhythmische Bewertung: {jazz_analysis['rhythm_assessment']}
 - Phrasierungs-Dichte: {jazz_analysis['density_assessment']}
-- Swing-Feel: {jazz_analysis['swing_feel']}
-- Ähnliche Künstler: {', '.join(jazz_analysis['similar_artists'])}
 
 {jazz_context}
 
 Gib detailliertes Feedback in 4 Kategorien (je 1-10 Punkte):
-1. Rhythmus & Timing - Analysiere Tempo-Stabilität, Swing-Feel, rhythmische Komplexität
-2. Harmonie - Bewerte basierend auf spektralen Eigenschaften, Note Detection und Jazz-Kontext
-3. Melodie & Phrasierung - Beurteile Noten-Dichte, Phrasenlänge, melodische Entwicklung, Tonumfang
-4. Artikulation & Dynamik - Analysiere Dynamik-Range und Variabilität
-
-Nutze die bereitgestellten Jazz-Theory Informationen um spezifische, fundierte Übungstipps zu geben.
-Referenziere konkrete Techniken und Beispiele aus der Jazz-Geschichte.
+1. Rhythmus & Timing - Analysiere Timing-Präzision und rhythmische Qualität
+2. Harmonie - Bewerte die Akkordwahl, Voice Leading und harmonische Bewegung
+3. Melodie & Phrasierung - Beurteile Noten-Auswahl, Phrasenlänge, melodische Entwicklung
+4. Artikulation & Dynamik - Analysiere Velocity-Variation und musikalischen Ausdruck
 
 Für jede Kategorie:
 - Gib einen Score (1.0 bis 10.0)
-- Schreibe 2-3 Sätze spezifisches Feedback
-- Gib 3 konkrete, umsetzbare Übungstipps (nutze Jazz-Theory Kontext!)
+- Schreibe 2-3 Sätze spezifisches Feedback basierend auf den erkannten Akkorden
+- Gib 3 konkrete, umsetzbare Übungstipps
 
 Antworte NUR mit diesem JSON-Format (keine Markdown-Backticks):
 {{
   "rhythm": {{
     "score": 7.5,
-    "feedback": "Dein Tempo ist...",
+    "feedback": "Dein Timing ist...",
     "tips": ["Tipp 1", "Tipp 2", "Tipp 3"]
   }},
   "harmony": {{
     "score": 8.0,
-    "feedback": "Die harmonische...",
+    "feedback": "Die Akkorde...",
     "tips": ["Tipp 1", "Tipp 2", "Tipp 3"]
   }},
   "melody": {{
@@ -749,12 +480,12 @@ Antworte NUR mit diesem JSON-Format (keine Markdown-Backticks):
   }},
   "articulation": {{
     "score": 7.0,
-    "feedback": "Die Artikulation...",
+    "feedback": "Die Dynamik...",
     "tips": ["Tipp 1", "Tipp 2", "Tipp 3"]
   }}
 }}"""
         
-        print("🇨🇭 Calling Apertus API with RAG context...")
+        print("🇨🇭 Calling Apertus API...")
         
         response = apertus_client.chat_completion(
             model="swiss-ai/Apertus-70B-Instruct-2509",
@@ -773,44 +504,46 @@ Antworte NUR mit diesem JSON-Format (keine Markdown-Backticks):
             clean = clean[json_start:json_end]
         
         feedback = json.loads(clean)
-        print("✅ Apertus feedback generated with RAG context")
+        print("✅ Apertus feedback generated")
         return feedback
         
     except Exception as e:
         print(f"Apertus API Fehler: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
 def generate_rule_based_feedback(audio_features: Dict, jazz_analysis: Dict) -> Dict:
     """Fallback: Regel-basiertes Feedback"""
-    tempo_stability = audio_features["tempo_stability"]
-    rhythm_complexity = audio_features["rhythm_complexity"]
-    dynamic_range = audio_features["dynamics"]["dynamic_range"]
-    note_density = audio_features["note_density"]
+    tempo_stability = audio_features.get("tempo_stability", 0.5)
+    rhythm_complexity = audio_features.get("rhythm_complexity", 5)
+    dynamic_range = audio_features.get("dynamics", {}).get("dynamic_range", 0.5)
+    note_density = audio_features.get("note_density", 2)
     
     rhythm_score = (tempo_stability * 5) + (5 if 3 <= rhythm_complexity <= 6 else 3)
-    rhythm_feedback = f"Tempo-Stabilität bei {tempo_stability:.0%}. {jazz_analysis['rhythm_assessment']}. {jazz_analysis['tempo_reference']}."
+    rhythm_feedback = f"Timing-Stabilität bei {tempo_stability:.0%}. {jazz_analysis['rhythm_assessment']}. {jazz_analysis['tempo_reference']}."
     
-    articulation_score = min(10, dynamic_range * 2)
-    articulation_feedback = f"Dynamik-Range von {dynamic_range:.1f}x. {jazz_analysis['density_assessment']}."
+    articulation_score = min(10, dynamic_range * 2 + 5)
+    articulation_feedback = f"Dynamik-Variation vorhanden. {jazz_analysis['density_assessment']}."
     
     return {
         "rhythm": {
-            "score": round(rhythm_score, 1),
+            "score": round(min(10, max(1, rhythm_score)), 1),
             "feedback": rhythm_feedback,
             "tips": [
-                f"Übe mit Metronom bei {audio_features['tempo']:.0f} BPM",
+                f"Übe mit Metronom bei {audio_features.get('tempo', 120):.0f} BPM",
                 "Höre dir " + jazz_analysis['similar_artists'][0] + " für rhythmische Inspiration an",
                 f"Arbeite am {jazz_analysis['swing_feel']}"
             ]
         },
         "harmony": {
             "score": 7.0,
-            "feedback": f"Harmonische Inhalte erkannt. Spektraler Centroid bei {audio_features['spectral']['centroid_mean']:.0f} Hz.",
+            "feedback": "Harmonische Struktur erkannt. Arbeite an Voice Leading zwischen Akkorden.",
             "tips": [
-                "Experimentiere mit ii-V-I Progressionen",
+                "Achte auf Guide Tones (3 und 7) bei ii-V-I",
                 "Nutze chromatische Approach-Töne",
-                "Studiere Bebop-Scales"
+                "Studiere Bebop-Scales für dominante Akkorde"
             ]
         },
         "melody": {
@@ -823,19 +556,19 @@ def generate_rule_based_feedback(audio_features: Dict, jazz_analysis: Dict) -> D
             ]
         },
         "articulation": {
-            "score": round(articulation_score, 1),
+            "score": round(min(10, max(1, articulation_score)), 1),
             "feedback": articulation_feedback,
             "tips": [
                 "Arbeite an dynamischen Kontrasten",
                 "Nutze Akzente für rhythmische Betonung",
-                "Experimentiere mit Ghost Notes"
+                "Experimentiere mit verschiedenen Anschlagstärken"
             ]
         }
     }
 
 
 # ============================================================================
-# BACKGROUND PROCESSING (Enhanced with Basic Pitch)
+# BACKGROUND PROCESSING
 # ============================================================================
 
 def process_midi_in_background(analysis_id: str, tmp_path: str):
@@ -844,21 +577,29 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
     import gc
     
     try:
-        # Step 1: MIDI Analysis (ersetzt Librosa + Basic Pitch!)
+        # Step 1: MIDI Analysis
         analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
+        print(f"🎹 Starting MIDI analysis for {tmp_path}")
+        
         note_analysis = analyze_midi_file(tmp_path)
         
         if note_analysis.get('error') or note_analysis.get('total_notes', 0) == 0:
             raise Exception(f"MIDI analysis failed: {note_analysis.get('error', 'No notes found')}")
         
-        # Create audio_features from MIDI data (for compatibility with existing code)
+        print(f"✅ MIDI analysis complete: {note_analysis.get('total_notes')} notes")
+        
+        # Create audio_features from MIDI data (for compatibility)
+        duration = note_analysis.get('duration', 1)
+        if duration <= 0:
+            duration = 1
+            
         audio_features = {
-            "duration": note_analysis.get('duration', 0),
+            "duration": duration,
             "tempo": note_analysis.get('tempo_bpm', 120),
             "tempo_stability": note_analysis.get('timing', {}).get('precision_score', 0.8),
             "beats": 0,
             "onsets": note_analysis.get('total_notes', 0),
-            "note_density": note_analysis.get('total_notes', 0) / max(note_analysis.get('duration', 1), 1),
+            "note_density": note_analysis.get('total_notes', 0) / duration,
             "pitch_range": {
                 "min": note_analysis.get('pitch_range', {}).get('min', 0),
                 "max": note_analysis.get('pitch_range', {}).get('max', 0),
@@ -876,14 +617,13 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
                 "rolloff_mean": 4000,
                 "flatness_mean": 0.1
             },
-            "rhythm_complexity": min(10, note_analysis.get('timing', {}).get('std_interval', 0.5) * 10),
+            "rhythm_complexity": min(10, max(1, note_analysis.get('timing', {}).get('std_interval', 0.5) * 10)),
             "harmonic_content": 0.5
         }
         
         # Step 2: Jazz Pattern Analysis
         jazz_analysis = analyze_jazz_patterns(audio_features)
         
-        # Free memory
         gc.collect()
         
         # Step 3: Apertus AI
@@ -897,6 +637,7 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
         loop.close()
         
         if not feedback:
+            print("⚠️ Apertus failed, using rule-based feedback")
             feedback = generate_rule_based_feedback(audio_features, jazz_analysis)
         
         overall_score = (
@@ -921,7 +662,7 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
         }
         
         gc.collect()
-        print("✅ MIDI Analysis complete!")
+        print("✅ Analysis complete!")
         
     except Exception as e:
         print(f"❌ Error in MIDI processing: {e}")
@@ -938,6 +679,10 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
         gc.collect()
 
 
+# ============================================================================
+# API ENDPOINTS
+# ============================================================================
+
 @app.post("/analyze-async")
 async def analyze_midi_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     if not (file.filename.endswith('.mid') or file.filename.endswith('.midi')):
@@ -945,7 +690,7 @@ async def analyze_midi_async(background_tasks: BackgroundTasks, file: UploadFile
     
     analysis_id = str(uuid.uuid4())
     
-    # WICHTIG: Speichere als .mid, NICHT als .mp3!
+    # Save as .mid (not .mp3!)
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mid') as tmp:
         content = await file.read()
         tmp.write(content)
@@ -969,7 +714,7 @@ async def health_check():
     return {
         "status": "healthy",
         "ai_enabled": apertus_client is not None,
-        "note_detection": "Basic Pitch"
+        "analysis_type": "MIDI"
     }
 
 
