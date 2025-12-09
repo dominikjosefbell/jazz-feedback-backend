@@ -766,26 +766,52 @@ def generate_rule_based_feedback(audio_features: Dict, jazz_analysis: Dict) -> D
 # BACKGROUND PROCESSING (Enhanced with Basic Pitch)
 # ============================================================================
 
-def process_audio_in_background(analysis_id: str, tmp_path: str):
-    """Background task with Librosa + Basic Pitch + Apertus (Memory Optimized)"""
+def process_midi_in_background(analysis_id: str, tmp_path: str):
+    """Background task for MIDI analysis + Apertus"""
     import asyncio
     import gc
     
     try:
-        # Step 1: Librosa
-        analysis_results[analysis_id] = {"status": "processing", "stage": "librosa"}
-        audio_features = analyze_audio_file(tmp_path)
-        jazz_analysis = analyze_jazz_patterns(audio_features)
-        
-        # Free memory after Librosa
-        gc.collect()
-        
-        # Step 2: Basic Pitch Note Detection (only for short files to avoid timeout/memory)
-        note_analysis = None
+        # Step 1: MIDI Analysis (ersetzt Librosa + Basic Pitch!)
         analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
         note_analysis = analyze_midi_file(tmp_path)
         
-        # Free memory before AI call
+        if note_analysis.get('error') or note_analysis.get('total_notes', 0) == 0:
+            raise Exception(f"MIDI analysis failed: {note_analysis.get('error', 'No notes found')}")
+        
+        # Create audio_features from MIDI data (for compatibility with existing code)
+        audio_features = {
+            "duration": note_analysis.get('duration', 0),
+            "tempo": note_analysis.get('tempo_bpm', 120),
+            "tempo_stability": note_analysis.get('timing', {}).get('precision_score', 0.8),
+            "beats": 0,
+            "onsets": note_analysis.get('total_notes', 0),
+            "note_density": note_analysis.get('total_notes', 0) / max(note_analysis.get('duration', 1), 1),
+            "pitch_range": {
+                "min": note_analysis.get('pitch_range', {}).get('min', 0),
+                "max": note_analysis.get('pitch_range', {}).get('max', 0),
+                "mean": (note_analysis.get('pitch_range', {}).get('min', 60) + note_analysis.get('pitch_range', {}).get('max', 60)) / 2
+            },
+            "dynamics": {
+                "mean_rms": note_analysis.get('dynamics', {}).get('mean', 80) / 127,
+                "max_rms": note_analysis.get('dynamics', {}).get('max', 100) / 127,
+                "dynamic_range": note_analysis.get('dynamics', {}).get('range', 40) / 127,
+                "variance": note_analysis.get('dynamics', {}).get('std', 20) / 127
+            },
+            "spectral": {
+                "centroid_mean": 2000,
+                "centroid_std": 500,
+                "rolloff_mean": 4000,
+                "flatness_mean": 0.1
+            },
+            "rhythm_complexity": min(10, note_analysis.get('timing', {}).get('std_interval', 0.5) * 10),
+            "harmonic_content": 0.5
+        }
+        
+        # Step 2: Jazz Pattern Analysis
+        jazz_analysis = analyze_jazz_patterns(audio_features)
+        
+        # Free memory
         gc.collect()
         
         # Step 3: Apertus AI
@@ -812,7 +838,7 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
             "overall_score": round(overall_score, 1),
             "audio_features": audio_features,
             "jazz_analysis": jazz_analysis,
-            "note_analysis": note_analysis,  # Can be None for long files
+            "note_analysis": note_analysis,
             "feedback": feedback,
             "ai_generated": apertus_client is not None
         }
@@ -822,44 +848,38 @@ def process_audio_in_background(analysis_id: str, tmp_path: str):
             "result": result
         }
         
-        # Final memory cleanup
         gc.collect()
-        print("✅ Analysis complete, memory cleaned up")
+        print("✅ MIDI Analysis complete!")
         
     except Exception as e:
-        print(f"Error in background processing: {e}")
+        print(f"❌ Error in MIDI processing: {e}")
         import traceback
         traceback.print_exc()
         analysis_results[analysis_id] = {
             "status": "error",
             "error": str(e)
         }
-        # Clean up on error
         gc.collect()
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
-        # Final cleanup
         gc.collect()
 
 
-# ============================================================================
-# API ENDPOINTS
-# ============================================================================
-
 @app.post("/analyze-async")
-async def analyze_audio_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def analyze_midi_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     if not (file.filename.endswith('.mid') or file.filename.endswith('.midi')):
         raise HTTPException(status_code=400, detail="Nur MIDI-Dateien erlaubt (.mid, .midi)")
     
     analysis_id = str(uuid.uuid4())
     
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
+    # WICHTIG: Speichere als .mid, NICHT als .mp3!
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mid') as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
     
-    background_tasks.add_task(process_audio_in_background, analysis_id, tmp_path)
+    background_tasks.add_task(process_midi_in_background, analysis_id, tmp_path)
     
     return {"analysis_id": analysis_id, "status": "processing"}
 
