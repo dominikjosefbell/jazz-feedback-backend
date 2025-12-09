@@ -215,47 +215,119 @@ HTML_TEMPLATE = """
             }, 5000); // Check every 5 seconds instead of 2
         }
 
-        function displayResults(data) {
-            const getScoreColor = (score) => score >= 8 ? 'green' : score >= 6 ? 'yellow' : 'orange';
-            let html = '';
+        import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-            if (data.ai_generated) {
-                html += '<div class="bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl p-4 mb-6"><div class="flex items-center gap-2"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M13 7H7v6h6V7z"/></svg><span class="font-semibold">🇨🇭 Feedback von Apertus + 🎹 Note Analysis</span></div></div>';
-            }
+// Import translations - correct path from contexts folder
+import translations from '../translations.json';
 
-            // Note Detection Results
-            if (data.note_analysis) {
-                html += '<div class="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6"><h3 class="font-semibold text-purple-900 mb-4">🎹 Note Detection</h3><div class="space-y-2 text-sm">';
-                html += '<p><strong>Erkannte Noten:</strong> ' + data.note_analysis.total_notes + '</p>';
-                html += '<p><strong>Tonumfang:</strong> ' + data.note_analysis.pitch_range.min_note + ' - ' + data.note_analysis.pitch_range.max_note + '</p>';
-                html += '<p><strong>Häufigste Noten:</strong> ' + data.note_analysis.most_common_notes.join(', ') + '</p>';
-                if (data.note_analysis.detected_scale) {
-                    html += '<p><strong>Vermutete Tonart:</strong> ' + data.note_analysis.detected_scale + '</p>';
-                }
-                html += '</div></div>';
-            }
+type Language = 'de' | 'en';
 
-            html += '<div class="bg-gradient-to-br from-red-50 to-pink-50 border border-red-200 rounded-xl p-6"><h3 class="font-semibold text-red-900 mb-4">🎷 Jazz-Kontext</h3><div class="space-y-2 text-sm"><p><strong>Tempo:</strong> ' + data.jazz_analysis.tempo_category + '</p><p class="text-red-700">' + data.jazz_analysis.tempo_reference + '</p><p><strong>Rhythmik:</strong> ' + data.jazz_analysis.rhythm_assessment + '</p><p><strong>Dichte:</strong> ' + data.jazz_analysis.density_assessment + '</p><p><strong>Swing:</strong> ' + data.jazz_analysis.swing_feel + '</p><p><strong>Ähnlich:</strong> ' + data.jazz_analysis.similar_artists.join(', ') + '</p></div></div>';
+interface LanguageContextType {
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: (key: string) => string;
+}
 
-            html += '<div class="bg-slate-50 border border-slate-200 rounded-xl p-6"><h3 class="font-semibold text-slate-900 mb-4">📊 Messwerte</h3><div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm"><div><p class="text-slate-600">Dauer</p><p class="font-mono font-bold">' + data.audio_features.duration.toFixed(1) + 's</p></div><div><p class="text-slate-600">Tempo</p><p class="font-mono font-bold">' + data.audio_features.tempo.toFixed(1) + ' BPM</p></div><div><p class="text-slate-600">Stabilität</p><p class="font-mono font-bold">' + (data.audio_features.tempo_stability * 100).toFixed(0) + '%</p></div><div><p class="text-slate-600">Noten-Dichte</p><p class="font-mono font-bold">' + data.audio_features.note_density.toFixed(2) + '/s</p></div><div><p class="text-slate-600">Dynamik</p><p class="font-mono font-bold">' + data.audio_features.dynamics.dynamic_range.toFixed(1) + 'x</p></div><div><p class="text-slate-600">Komplexität</p><p class="font-mono font-bold">' + data.audio_features.rhythm_complexity.toFixed(1) + '/10</p></div></div></div>';
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-            const color = getScoreColor(data.overall_score);
-            html += '<div class="bg-white rounded-2xl shadow-lg p-8 text-center"><h2 class="text-2xl font-bold mb-4">Gesamtbewertung</h2><div class="text-6xl font-bold text-' + color + '-600 mb-2">' + data.overall_score + '<span class="text-3xl text-gray-400">/10</span></div></div>';
+interface LanguageProviderProps {
+  children: ReactNode;
+}
 
-            const categories = [
-                { title: 'Rhythmus & Timing', data: data.feedback.rhythm },
-                { title: 'Harmonie', data: data.feedback.harmony },
-                { title: 'Melodie & Phrasierung', data: data.feedback.melody },
-                { title: 'Artikulation & Dynamik', data: data.feedback.articulation }
-            ];
+export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) => {
+  const [language, setLanguage] = useState<Language>('de');
 
-            categories.forEach(cat => {
-                const catColor = getScoreColor(cat.data.score);
-                html += '<div class="bg-white rounded-2xl shadow-lg p-6"><div class="flex items-center justify-between mb-2"><h3 class="text-xl font-bold">' + cat.title + '</h3><span class="text-2xl font-bold text-' + catColor + '-600">' + cat.data.score.toFixed(1) + '</span></div><p class="text-gray-700 mb-3">' + cat.data.feedback + '</p><div class="bg-gray-50 rounded-lg p-4"><p class="font-semibold mb-2">Tipps:</p><ul class="space-y-1">' + cat.data.tips.map(tip => '<li class="text-sm text-gray-600">• ' + tip + '</li>').join('') + '</ul></div></div>';
-            });
+  // Detect browser language on mount
+  useEffect(() => {
+    const browserLang = navigator.language.split('-')[0];
+    const savedLang = localStorage.getItem('huntsense_language') as Language;
+    
+    if (savedLang && (savedLang === 'de' || savedLang === 'en')) {
+      setLanguage(savedLang);
+    } else if (browserLang === 'en') {
+      setLanguage('en');
+    } else {
+      setLanguage('de'); // Default to German
+    }
+  }, []);
 
-            document.getElementById('results').innerHTML = html;
-        }
+  // Save language preference
+  const handleSetLanguage = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('huntsense_language', lang);
+  };
+
+  // Translation function
+  const t = (key: string): string => {
+    const keys = key.split('.');
+    let value: any = (translations as any)[language];
+    
+    for (const k of keys) {
+      if (value && typeof value === 'object' && k in value) {
+        value = value[k];
+      } else {
+        console.warn(`Translation not found: ${key}`);
+        return key;
+      }
+    }
+    
+    return typeof value === 'string' ? value : key;
+  };
+
+  return (
+    <LanguageContext.Provider value={{ language, setLanguage: handleSetLanguage, t }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+};
+
+export const useLanguage = (): LanguageContextType => {
+  const context = useContext(LanguageContext);
+  if (!context) {
+    throw new Error('useLanguage must be used within a LanguageProvider');
+  }
+  return context;
+};
+
+// Language Switcher Component
+export const LanguageSwitcher: React.FC = () => {
+  const { language, setLanguage } = useLanguage();
+
+  return (
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <button
+        onClick={() => setLanguage('de')}
+        style={{
+          padding: '6px 12px',
+          border: language === 'de' ? '2px solid #1F4788' : '1px solid #ccc',
+          borderRadius: '4px',
+          backgroundColor: language === 'de' ? '#1F4788' : 'white',
+          color: language === 'de' ? 'white' : '#333',
+          cursor: 'pointer',
+          fontWeight: language === 'de' ? 'bold' : 'normal',
+          fontSize: '14px'
+        }}
+      >
+        🇩🇪 DE
+      </button>
+      <button
+        onClick={() => setLanguage('en')}
+        style={{
+          padding: '6px 12px',
+          border: language === 'en' ? '2px solid #1F4788' : '1px solid #ccc',
+          borderRadius: '4px',
+          backgroundColor: language === 'en' ? '#1F4788' : 'white',
+          color: language === 'en' ? 'white' : '#333',
+          cursor: 'pointer',
+          fontWeight: language === 'en' ? 'bold' : 'normal',
+          fontSize: '14px'
+        }}
+      >
+        🇬🇧 EN
+      </button>
+    </div>
+  );
+};
     </script>
 </body>
 </html>
