@@ -1,5 +1,5 @@
-# Jazz Improvisation Feedback Platform - MIDI VERSION WITH SHEET MUSIC
-# FastAPI + MIDI Analysis + Apertus AI + ABC Notation
+# Jazz Improvisation Feedback Platform - MIDI VERSION WITH PIANO SHEET MUSIC
+# FastAPI + MIDI Analysis + Apertus AI + Grand Staff Notation
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,7 +48,7 @@ initialize_apertus()
 analysis_results = {}
 
 # ============================================================================
-# WEB UI WITH SHEET MUSIC
+# WEB UI WITH GRAND STAFF NOTATION
 # ============================================================================
 
 HTML_TEMPLATE = """
@@ -62,10 +62,8 @@ HTML_TEMPLATE = """
     <!-- ABCJS for Sheet Music Rendering -->
     <script src="https://cdn.jsdelivr.net/npm/abcjs@6.2.2/dist/abcjs-basic-min.js"></script>
     <style>
-        .abcjs-container svg {
-            max-width: 100%;
-            height: auto;
-        }
+        .abcjs-container svg { max-width: 100%; height: auto; }
+        #pianoSheet svg { background: white; border-radius: 8px; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-red-50 via-white to-white min-h-screen">
@@ -114,20 +112,16 @@ HTML_TEMPLATE = """
         let selectedFile = null;
         let analysisId = null;
 
-        fetch('/ai-status')
-            .then(r => r.json())
-            .then(data => {
-                const statusDiv = document.getElementById('aiStatus');
-                if (data.ai_enabled) {
-                    statusDiv.innerHTML = '<div class="bg-gradient-to-r from-red-50 to-white border border-red-200 rounded-xl p-4"><div class="flex items-center gap-3"><svg class="w-8 h-8 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg><div><div class="text-sm font-medium text-red-900">🇨🇭 Apertus AI + 🎹 MIDI + 🎼 Notenschrift</div><div class="text-xs text-red-700">Akkord-Erkennung & Swiss AI Feedback</div></div></div></div>';
-                } else {
-                    statusDiv.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4"><span class="text-sm font-medium text-yellow-900">⚠️ AI deaktiviert - Nutze regel-basiertes Feedback</span></div>';
-                }
-            });
-
-        document.getElementById('dropzone').addEventListener('click', () => {
-            document.getElementById('fileInput').click();
+        fetch('/ai-status').then(r => r.json()).then(data => {
+            const statusDiv = document.getElementById('aiStatus');
+            if (data.ai_enabled) {
+                statusDiv.innerHTML = '<div class="bg-gradient-to-r from-red-50 to-white border border-red-200 rounded-xl p-4"><div class="flex items-center gap-3"><svg class="w-8 h-8 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg><div><div class="text-sm font-medium text-red-900">🇨🇭 Apertus AI + 🎹 MIDI + 🎼 Notenschrift</div><div class="text-xs text-red-700">Akkord-Erkennung & Swiss AI Feedback</div></div></div></div>';
+            } else {
+                statusDiv.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4"><span class="text-sm font-medium text-yellow-900">⚠️ AI deaktiviert</span></div>';
+            }
         });
+
+        document.getElementById('dropzone').addEventListener('click', () => document.getElementById('fileInput').click());
 
         document.getElementById('fileInput').addEventListener('change', (e) => {
             const file = e.target.files[0];
@@ -142,7 +136,6 @@ HTML_TEMPLATE = """
 
         document.getElementById('analyzeBtn').addEventListener('click', async () => {
             if (!selectedFile) return;
-
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('results').innerHTML = '';
             document.getElementById('loadingText').textContent = 'Uploading...';
@@ -152,19 +145,12 @@ HTML_TEMPLATE = """
             formData.append('file', selectedFile);
 
             try {
-                const response = await fetch('/analyze-async', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/analyze-async', { method: 'POST', body: formData });
                 const data = await response.json();
                 analysisId = data.analysis_id;
-
                 document.getElementById('loadingText').textContent = 'Analysiere MIDI...';
                 document.getElementById('progressBar').style.width = '20%';
-
                 pollForResults(analysisId);
-
             } catch (error) {
                 alert('Fehler: ' + error.message);
                 document.getElementById('loading').classList.add('hidden');
@@ -174,14 +160,11 @@ HTML_TEMPLATE = """
         async function pollForResults(id) {
             const maxAttempts = 60;
             let attempts = 0;
-
             const interval = setInterval(async () => {
                 attempts++;
-
                 try {
                     const response = await fetch('/result/' + id);
                     const data = await response.json();
-
                     if (data.status === 'completed') {
                         clearInterval(interval);
                         document.getElementById('progressBar').style.width = '100%';
@@ -192,107 +175,142 @@ HTML_TEMPLATE = """
                     } else if (data.status === 'processing') {
                         const progress = 20 + (attempts / maxAttempts) * 70;
                         document.getElementById('progressBar').style.width = progress + '%';
-                        
-                        if (data.stage === 'notes') {
-                            document.getElementById('loadingText').textContent = '🎹 MIDI Analyse...';
-                        } else if (data.stage === 'ai') {
-                            document.getElementById('loadingText').textContent = '🇨🇭 Apertus AI Feedback...';
-                        }
+                        if (data.stage === 'notes') document.getElementById('loadingText').textContent = '🎹 MIDI Analyse...';
+                        else if (data.stage === 'ai') document.getElementById('loadingText').textContent = '🇨🇭 Apertus AI Feedback...';
                     } else if (data.status === 'error') {
                         clearInterval(interval);
                         alert('Fehler: ' + data.error);
                         document.getElementById('loading').classList.add('hidden');
                     }
-
                     if (attempts >= maxAttempts) {
                         clearInterval(interval);
-                        alert('Timeout: Analyse dauert zu lange.');
+                        alert('Timeout');
                         document.getElementById('loading').classList.add('hidden');
                     }
-                } catch (error) {
-                    console.error('Poll error:', error);
-                }
+                } catch (error) { console.error('Poll error:', error); }
             }, 3000);
         }
 
-        // Convert MIDI note to ABC notation
-        function midiToAbc(midiNote) {
+        // ABC Notation Helper - MIDI to ABC for Treble Clef
+        function midiToAbcTreble(midiNote) {
             const noteNames = ['C', '^C', 'D', '^D', 'E', 'F', '^F', 'G', '^G', 'A', '^A', 'B'];
             const octave = Math.floor(midiNote / 12) - 1;
-            const noteName = noteNames[midiNote % 12];
-            
-            // ABC notation: C4 = C, C5 = c, C6 = c', C3 = C,
-            if (octave === 4) {
-                return noteName;
-            } else if (octave === 5) {
-                return noteName.toLowerCase();
-            } else if (octave === 6) {
-                return noteName.toLowerCase() + "'";
-            } else if (octave === 7) {
-                return noteName.toLowerCase() + "''";
-            } else if (octave === 3) {
-                return noteName + ",";
-            } else if (octave === 2) {
-                return noteName + ",,";
-            } else if (octave === 1) {
-                return noteName + ",,,";
-            }
-            return noteName;
+            const note = noteNames[midiNote % 12];
+            if (octave === 4) return note;
+            if (octave === 5) return note.toLowerCase();
+            if (octave === 6) return note.toLowerCase() + "'";
+            if (octave === 7) return note.toLowerCase() + "''";
+            if (octave === 3) return note + ",";
+            if (octave === 2) return note + ",,";
+            return note;
         }
 
-        // Generate ABC notation from chords
-        function generateAbcNotation(chords, key) {
+        // ABC Notation Helper - MIDI to ABC for Bass Clef
+        function midiToAbcBass(midiNote) {
+            const noteNames = ['C', '^C', 'D', '^D', 'E', 'F', '^F', 'G', '^G', 'A', '^A', 'B'];
+            const octave = Math.floor(midiNote / 12) - 1;
+            const note = noteNames[midiNote % 12];
+            if (octave === 2) return note + ",";
+            if (octave === 3) return note;
+            if (octave === 4) return note.toLowerCase();
+            if (octave === 1) return note + ",,";
+            return note + ",";
+        }
+
+        // Generate Grand Staff (Piano) ABC Notation
+        function generateGrandStaffAbc(notes, chords, key, tempo) {
+            const middleC = 60;
+            const bpm = tempo || 120;
+            const beatDuration = 60 / bpm; // seconds per beat
+            
+            // Group notes by beat
+            const timeGroups = {};
+            notes.forEach(note => {
+                const beat = Math.floor(note.start_time / beatDuration);
+                if (!timeGroups[beat]) timeGroups[beat] = { treble: [], bass: [] };
+                if (note.pitch >= middleC) {
+                    timeGroups[beat].treble.push(note.pitch);
+                } else {
+                    timeGroups[beat].bass.push(note.pitch);
+                }
+            });
+
+            // Chord symbols per beat
+            const chordAtBeat = {};
+            if (chords) {
+                chords.forEach(chord => {
+                    const beat = Math.floor(chord.start_time / beatDuration);
+                    chordAtBeat[beat] = chord.symbol;
+                });
+            }
+
+            const beats = Object.keys(timeGroups).map(Number).sort((a, b) => a - b);
+            const maxBeats = Math.min(beats.length, 32);
+            
+            // Extract key for ABC
+            let abcKey = 'C';
+            if (key) {
+                const keyMatch = key.match(/^([A-G][#b]?)/);
+                if (keyMatch) abcKey = keyMatch[1].replace('#', '^').replace('b', '_');
+            }
+
             let abc = "X:1\\n";
-            abc += "T:Erkannte Akkorde\\n";
+            abc += "T:MIDI Analyse\\n";
             abc += "M:4/4\\n";
             abc += "L:1/4\\n";
-            abc += "K:" + (key ? key.split(' ')[0] : 'C') + "\\n";
-            abc += "|";
+            abc += "Q:1/4=" + bpm + "\\n";
+            abc += "K:" + abcKey + "\\n";
+            abc += "%%staves {1 2}\\n";
+            abc += "V:1 clef=treble\\n";
+            abc += "V:2 clef=bass\\n";
             
-            chords.forEach((chord, index) => {
-                // Add chord symbol
-                abc += '"' + chord.symbol + '"';
+            // Treble staff
+            abc += "[V:1] ";
+            let count = 0;
+            for (let i = 0; i < maxBeats; i++) {
+                const beat = beats[i];
+                if (beat === undefined) continue;
+                const group = timeGroups[beat];
                 
-                // Add notes as chord (stacked)
-                if (chord.pitches && chord.pitches.length > 0) {
-                    abc += '[';
-                    chord.pitches.forEach(pitch => {
-                        abc += midiToAbc(pitch);
-                    });
-                    abc += ']';
-                }
+                if (chordAtBeat[beat]) abc += '"' + chordAtBeat[beat] + '"';
                 
-                // Add bar line every chord for clarity
-                abc += ' |';
-            });
-            
-            return abc;
-        }
-
-        // Generate ABC for melody/notes sequence
-        function generateMelodyAbc(notes, key) {
-            let abc = "X:2\\n";
-            abc += "T:Noten-Sequenz\\n";
-            abc += "M:4/4\\n";
-            abc += "L:1/8\\n";
-            abc += "K:" + (key ? key.split(' ')[0] : 'C') + "\\n";
-            
-            let noteCount = 0;
-            notes.slice(0, 32).forEach((note, index) => {
-                abc += midiToAbc(note.pitch);
-                noteCount++;
-                
-                // Add bar line every 8 notes
-                if (noteCount % 8 === 0) {
-                    abc += ' |';
+                if (!group.treble || group.treble.length === 0) {
+                    abc += "z";
+                } else if (group.treble.length === 1) {
+                    abc += midiToAbcTreble(group.treble[0]);
                 } else {
-                    abc += ' ';
+                    abc += "[";
+                    group.treble.sort((a,b) => a-b).forEach(p => abc += midiToAbcTreble(p));
+                    abc += "]";
                 }
-            });
-            
-            if (notes.length > 32) {
-                abc += '... (' + (notes.length - 32) + ' weitere)';
+                count++;
+                if (count % 4 === 0) abc += " |";
+                abc += " ";
             }
+            abc += "|\\n";
+            
+            // Bass staff
+            abc += "[V:2] ";
+            count = 0;
+            for (let i = 0; i < maxBeats; i++) {
+                const beat = beats[i];
+                if (beat === undefined) continue;
+                const group = timeGroups[beat];
+                
+                if (!group.bass || group.bass.length === 0) {
+                    abc += "z";
+                } else if (group.bass.length === 1) {
+                    abc += midiToAbcBass(group.bass[0]);
+                } else {
+                    abc += "[";
+                    group.bass.sort((a,b) => a-b).forEach(p => abc += midiToAbcBass(p));
+                    abc += "]";
+                }
+                count++;
+                if (count % 4 === 0) abc += " |";
+                abc += " ";
+            }
+            abc += "|";
             
             return abc;
         }
@@ -302,39 +320,31 @@ HTML_TEMPLATE = """
             let html = '';
 
             if (data.ai_generated) {
-                html += '<div class="bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl p-4 mb-6"><div class="flex items-center gap-2"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M13 7H7v6h6V7z"/></svg><span class="font-semibold">🇨🇭 Feedback von Apertus AI</span></div></div>';
+                html += '<div class="bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl p-4 mb-6"><div class="flex items-center gap-2"><span class="font-semibold">🇨🇭 Feedback von Apertus AI</span></div></div>';
             }
 
-            // SHEET MUSIC - CHORDS (NEU!)
-            if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
-                html += '<div class="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4 shadow-lg">';
-                html += '<h3 class="font-bold text-xl text-gray-900 mb-4">🎼 Notenschrift - Akkorde</h3>';
-                html += '<div id="sheetMusic" class="bg-gray-50 rounded-xl p-4 overflow-x-auto"></div>';
-                html += '</div>';
-            }
-
-            // SHEET MUSIC - MELODY (NEU!)
+            // GRAND STAFF SHEET MUSIC (Single Piano Display)
             if (data.note_analysis && data.note_analysis.notes && data.note_analysis.notes.length > 0) {
                 html += '<div class="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4 shadow-lg">';
-                html += '<h3 class="font-bold text-xl text-gray-900 mb-4">🎵 Notenschrift - Melodie</h3>';
-                html += '<div id="melodySheet" class="bg-gray-50 rounded-xl p-4 overflow-x-auto"></div>';
+                html += '<h3 class="font-bold text-xl text-gray-900 mb-2">🎼 Notenschrift</h3>';
+                html += '<p class="text-sm text-gray-500 mb-4">Klaviersystem mit Violin- und Bassschlüssel</p>';
+                html += '<div id="pianoSheet" class="bg-gray-50 rounded-xl p-4 overflow-x-auto min-h-[200px]"></div>';
                 html += '</div>';
             }
 
             // NOTE DETECTION
             if (data.note_analysis && data.note_analysis.total_notes > 0) {
                 html += '<div class="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6 mb-4">';
-                html += '<h3 class="font-semibold text-purple-900 mb-4">🎹 Note Detection</h3>';
+                html += '<h3 class="font-semibold text-purple-900 mb-4">🎹 Erkannte Noten</h3>';
                 html += '<div class="grid grid-cols-2 gap-4 text-sm">';
-                html += '<div><strong>Erkannte Noten:</strong> ' + data.note_analysis.total_notes + '</div>';
+                html += '<div><strong>Anzahl:</strong> ' + data.note_analysis.total_notes + '</div>';
                 html += '<div><strong>Tonumfang:</strong> ' + data.note_analysis.pitch_range.min_note + ' - ' + data.note_analysis.pitch_range.max_note + '</div>';
-                html += '<div><strong>Häufigste Noten:</strong> ' + data.note_analysis.most_common_notes.join(', ') + '</div>';
-                html += '<div><strong>Erkannte Tonart:</strong> ' + (data.note_analysis.detected_scale || 'unbekannt') + '</div>';
-                html += '</div>';
-                html += '</div>';
+                html += '<div><strong>Häufigste:</strong> ' + data.note_analysis.most_common_notes.join(', ') + '</div>';
+                html += '<div><strong>Tonart:</strong> ' + (data.note_analysis.detected_scale || 'unbekannt') + '</div>';
+                html += '</div></div>';
             }
 
-            // CHORD DETECTION (Text version)
+            // CHORD DETECTION
             if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
                 html += '<div class="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-6 mb-4">';
                 html += '<h3 class="font-semibold text-blue-900 mb-4">🎼 Erkannte Akkorde</h3>';
@@ -347,9 +357,7 @@ HTML_TEMPLATE = """
                     html += '<div class="text-sm text-gray-600 mt-1">' + chord.notes.join(' · ') + '</div>';
                     html += '<div class="text-xs text-gray-400 mt-1">' + chord.start_time.toFixed(2) + 's</div>';
                     html += '</div>';
-                    if (index < data.note_analysis.chords.length - 1) {
-                        html += '<div class="text-gray-400 text-2xl">→</div>';
-                    }
+                    if (index < data.note_analysis.chords.length - 1) html += '<div class="text-gray-400 text-2xl">→</div>';
                 });
                 html += '</div>';
                 if (data.note_analysis.progression) {
@@ -383,7 +391,6 @@ HTML_TEMPLATE = """
                 { title: 'Melodie & Phrasierung', data: data.feedback.melody },
                 { title: 'Artikulation & Dynamik', data: data.feedback.articulation }
             ];
-
             categories.forEach(cat => {
                 const catColor = getScoreColor(cat.data.score);
                 html += '<div class="bg-white rounded-2xl shadow-lg p-6 mb-4"><div class="flex items-center justify-between mb-2"><h3 class="text-xl font-bold">' + cat.title + '</h3><span class="text-2xl font-bold text-' + catColor + '-600">' + cat.data.score.toFixed(1) + '</span></div><p class="text-gray-700 mb-3">' + cat.data.feedback + '</p><div class="bg-gray-50 rounded-lg p-4"><p class="font-semibold mb-2">Tipps:</p><ul class="space-y-1">' + cat.data.tips.map(tip => '<li class="text-sm text-gray-600">• ' + tip + '</li>').join('') + '</ul></div></div>';
@@ -391,34 +398,30 @@ HTML_TEMPLATE = """
 
             document.getElementById('results').innerHTML = html;
 
-            // Render Sheet Music with ABCJS
+            // Render Grand Staff
             setTimeout(() => {
-                if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
-                    const key = data.note_analysis.detected_scale || 'C Major';
-                    const abcChords = generateAbcNotation(data.note_analysis.chords, key);
-                    console.log('ABC Chords:', abcChords);
-                    
-                    if (typeof ABCJS !== 'undefined') {
-                        ABCJS.renderAbc('sheetMusic', abcChords.replace(/\\\\n/g, '\\n'), {
-                            responsive: 'resize',
-                            add_classes: true
-                        });
-                    }
-                }
-
                 if (data.note_analysis && data.note_analysis.notes && data.note_analysis.notes.length > 0) {
                     const key = data.note_analysis.detected_scale || 'C Major';
-                    const abcMelody = generateMelodyAbc(data.note_analysis.notes, key);
-                    console.log('ABC Melody:', abcMelody);
+                    const chords = data.note_analysis.chords || [];
+                    const tempo = data.audio_features.tempo || 120;
+                    const abcNotation = generateGrandStaffAbc(data.note_analysis.notes, chords, key, tempo);
+                    console.log('ABC:', abcNotation.replace(/\\\\n/g, '\\n'));
                     
                     if (typeof ABCJS !== 'undefined') {
-                        ABCJS.renderAbc('melodySheet', abcMelody.replace(/\\\\n/g, '\\n'), {
-                            responsive: 'resize',
-                            add_classes: true
-                        });
+                        try {
+                            ABCJS.renderAbc('pianoSheet', abcNotation.replace(/\\\\n/g, '\\n'), {
+                                responsive: 'resize',
+                                staffwidth: 700,
+                                paddingtop: 20,
+                                paddingbottom: 20
+                            });
+                        } catch (e) {
+                            console.error('ABCJS Error:', e);
+                            document.getElementById('pianoSheet').innerHTML = '<p class="text-red-500">Fehler beim Rendern: ' + e.message + '</p>';
+                        }
                     }
                 }
-            }, 100);
+            }, 200);
         }
     </script>
 </body>
@@ -429,15 +432,9 @@ HTML_TEMPLATE = """
 async def root():
     return HTML_TEMPLATE
 
-
 @app.get("/ai-status")
 async def ai_status():
-    return {
-        "ai_enabled": apertus_client is not None,
-        "model": "swiss-ai/Apertus-70B-Instruct-2509" if apertus_client else None,
-        "note_detection": "MIDI Analysis"
-    }
-
+    return {"ai_enabled": apertus_client is not None, "model": "swiss-ai/Apertus-70B-Instruct-2509" if apertus_client else None, "note_detection": "MIDI Analysis"}
 
 # ============================================================================
 # JAZZ PATTERN ANALYSIS
@@ -448,93 +445,49 @@ def analyze_jazz_patterns(audio_features: Dict) -> Dict:
     rhythm_complexity = audio_features.get("rhythm_complexity", 5)
     note_density = audio_features.get("note_density", 2)
     
-    if 60 <= tempo < 100:
-        tempo_category = "Ballad"
-        reference = "Ähnlich Bill Evans' 'Waltz for Debby'"
-    elif 100 <= tempo < 140:
-        tempo_category = "Medium Swing"
-        reference = "Typisch für Miles Davis' 'So What'"
-    elif 140 <= tempo < 200:
-        tempo_category = "Up-Tempo/Bebop"
-        reference = "Charlie Parker Bebop-Tempo"
-    else:
-        tempo_category = "Very Fast"
-        reference = "John Coltrane 'Giant Steps' Tempo"
+    if 60 <= tempo < 100: tempo_category, reference = "Ballad", "Ähnlich Bill Evans' 'Waltz for Debby'"
+    elif 100 <= tempo < 140: tempo_category, reference = "Medium Swing", "Typisch für Miles Davis' 'So What'"
+    elif 140 <= tempo < 200: tempo_category, reference = "Up-Tempo/Bebop", "Charlie Parker Bebop-Tempo"
+    else: tempo_category, reference = "Very Fast", "John Coltrane 'Giant Steps' Tempo"
     
-    if rhythm_complexity < 3:
-        rhythm_assessment = "Einfache, klare Phrasierung"
-    elif 3 <= rhythm_complexity < 6:
-        rhythm_assessment = "Moderate Komplexität, gut balanciert"
-    else:
-        rhythm_assessment = "Sehr komplex, evtl. zu hektisch"
+    if rhythm_complexity < 3: rhythm_assessment = "Einfache, klare Phrasierung"
+    elif 3 <= rhythm_complexity < 6: rhythm_assessment = "Moderate Komplexität, gut balanciert"
+    else: rhythm_assessment = "Sehr komplex, evtl. zu hektisch"
     
-    if note_density < 2:
-        density_assessment = "Sparsame Phrasierung (Monk-Stil)"
-    elif 2 <= note_density < 4:
-        density_assessment = "Ausgewogene Dichte (Mainstream Jazz)"
-    else:
-        density_assessment = "Sehr dichte Lines (Bebop/Coltrane-Stil)"
+    if note_density < 2: density_assessment = "Sparsame Phrasierung (Monk-Stil)"
+    elif 2 <= note_density < 4: density_assessment = "Ausgewogene Dichte (Mainstream Jazz)"
+    else: density_assessment = "Sehr dichte Lines (Bebop/Coltrane-Stil)"
     
     artists = []
-    if tempo < 100 and note_density < 2:
-        artists.extend(["Bill Evans", "Keith Jarrett"])
-    elif 140 <= tempo < 200 and note_density > 3:
-        artists.extend(["Charlie Parker", "Dizzy Gillespie"])
-    elif note_density > 4:
-        artists.extend(["John Coltrane", "Michael Brecker"])
-    else:
-        artists.extend(["Miles Davis", "Dexter Gordon"])
+    if tempo < 100 and note_density < 2: artists = ["Bill Evans", "Keith Jarrett"]
+    elif 140 <= tempo < 200 and note_density > 3: artists = ["Charlie Parker", "Dizzy Gillespie"]
+    elif note_density > 4: artists = ["John Coltrane", "Michael Brecker"]
+    else: artists = ["Miles Davis", "Dexter Gordon"]
     
-    return {
-        "tempo_category": tempo_category,
-        "tempo_reference": reference,
-        "rhythm_assessment": rhythm_assessment,
-        "density_assessment": density_assessment,
-        "swing_feel": "Classic Swing Feel" if 3 <= rhythm_complexity < 6 else "Complex Swing",
-        "similar_artists": artists
-    }
-
+    return {"tempo_category": tempo_category, "tempo_reference": reference, "rhythm_assessment": rhythm_assessment, "density_assessment": density_assessment, "swing_feel": "Classic Swing Feel" if 3 <= rhythm_complexity < 6 else "Complex Swing", "similar_artists": artists}
 
 # ============================================================================
 # APERTUS AI FEEDBACK
 # ============================================================================
 
 async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_analysis: Dict) -> Dict:
-    """Nutzt Apertus AI für intelligentes Feedback"""
-    
-    if not apertus_client:
-        print("Apertus nicht verfügbar, fallback")
-        return None
+    if not apertus_client: return None
     
     try:
-        # Get relevant jazz theory context
-        print("🔍 Attempting to load knowledge base...")
         try:
             kb = get_knowledge_base()
-            jazz_context = kb.get_context_for_analysis(
-                tempo=audio_features.get('tempo', 120),
-                tempo_category=jazz_analysis['tempo_category'],
-                rhythm_complexity=audio_features.get('rhythm_complexity', 5)
-            )
-            print(f"✅ Retrieved {len(jazz_context)} chars of jazz theory context")
-        except Exception as e:
-            print(f"❌ Could not load knowledge base: {e}")
-            jazz_context = ""
+            jazz_context = kb.get_context_for_analysis(tempo=audio_features.get('tempo', 120), tempo_category=jazz_analysis['tempo_category'], rhythm_complexity=audio_features.get('rhythm_complexity', 5))
+        except: jazz_context = ""
         
-        # Build chord info for prompt
         chord_info = ""
         if note_analysis and note_analysis.get("chords"):
             chord_symbols = [c.get('symbol', '?') for c in note_analysis['chords'][:10]]
             chord_info = f"\n- Erkannte Akkorde: {' → '.join(chord_symbols)}"
-            
             if note_analysis.get('progression'):
                 prog = note_analysis['progression']
-                if prog.get('type') and prog['type'] != 'Custom':
-                    chord_info += f"\n- Progression: {prog['type']}"
-                if prog.get('roman_numerals'):
-                    chord_info += f"\n- Roman Numerals: {' → '.join(prog['roman_numerals'][:10])}"
+                if prog.get('type') and prog['type'] != 'Custom': chord_info += f"\n- Progression: {prog['type']}"
+                if prog.get('roman_numerals'): chord_info += f"\n- Roman Numerals: {' → '.join(prog['roman_numerals'][:10])}"
         
-        # Enhanced prompt with MIDI information
         note_info = ""
         if note_analysis and note_analysis.get("total_notes", 0) > 0:
             note_info = f"""
@@ -542,257 +495,90 @@ MIDI ANALYSE (100% akkurat):
 - Erkannte Noten: {note_analysis['total_notes']}
 - Tonumfang: {note_analysis['pitch_range']['min_note']} bis {note_analysis['pitch_range']['max_note']}
 - Häufigste Noten: {', '.join(note_analysis['most_common_notes'][:5])}
-- Erkannte Tonart: {note_analysis.get('detected_scale', 'unbekannt')}{chord_info}
-- Timing Precision: {note_analysis.get('timing', {}).get('precision_score', 0):.1%}
-- Dynamic Range: {note_analysis.get('dynamics', {}).get('range', 0)} (velocity)
-"""
+- Erkannte Tonart: {note_analysis.get('detected_scale', 'unbekannt')}{chord_info}"""
         
-        prompt = f"""
-Du bist ein erfahrener Jazz-Lehrer mit 30 Jahren Unterrichtserfahrung. Analysiere diese Jazz-Improvisation und gib konstruktives, spezifisches Feedback.
+        prompt = f"""Du bist ein erfahrener Jazz-Lehrer. Analysiere diese Jazz-Improvisation:
 
 MIDI-DATEN:
-- Dauer: {audio_features.get('duration', 0):.1f} Sekunden
-- Tempo: {audio_features.get('tempo', 120):.1f} BPM
-- Noten-Dichte: {audio_features.get('note_density', 0):.2f} Noten/Sekunde
-
+- Dauer: {audio_features.get('duration', 0):.1f}s, Tempo: {audio_features.get('tempo', 120):.1f} BPM
 {note_info}
 
-JAZZ-KONTEXT:
-- Tempo-Kategorie: {jazz_analysis['tempo_category']}
-- Referenz: {jazz_analysis['tempo_reference']}
-- Rhythmische Bewertung: {jazz_analysis['rhythm_assessment']}
-- Phrasierungs-Dichte: {jazz_analysis['density_assessment']}
-
+JAZZ-KONTEXT: {jazz_analysis['tempo_category']}, {jazz_analysis['rhythm_assessment']}
 {jazz_context}
 
-Gib detailliertes Feedback in 4 Kategorien (je 1-10 Punkte):
-1. Rhythmus & Timing - Analysiere Timing-Präzision und rhythmische Qualität
-2. Harmonie - Bewerte die Akkordwahl, Voice Leading und harmonische Bewegung
-3. Melodie & Phrasierung - Beurteile Noten-Auswahl, Phrasenlänge, melodische Entwicklung
-4. Artikulation & Dynamik - Analysiere Velocity-Variation und musikalischen Ausdruck
+Gib Feedback in 4 Kategorien (je 1-10):
+1. Rhythmus & Timing 2. Harmonie 3. Melodie & Phrasierung 4. Artikulation & Dynamik
 
-Für jede Kategorie:
-- Gib einen Score (1.0 bis 10.0)
-- Schreibe 2-3 Sätze spezifisches Feedback basierend auf den erkannten Akkorden
-- Gib 3 konkrete, umsetzbare Übungstipps
-
-Antworte NUR mit diesem JSON-Format (keine Markdown-Backticks):
-{{
-  "rhythm": {{
-    "score": 7.5,
-    "feedback": "Dein Timing ist...",
-    "tips": ["Tipp 1", "Tipp 2", "Tipp 3"]
-  }},
-  "harmony": {{
-    "score": 8.0,
-    "feedback": "Die Akkorde...",
-    "tips": ["Tipp 1", "Tipp 2", "Tipp 3"]
-  }},
-  "melody": {{
-    "score": 6.5,
-    "feedback": "Deine melodischen...",
-    "tips": ["Tipp 1", "Tipp 2", "Tipp 3"]
-  }},
-  "articulation": {{
-    "score": 7.0,
-    "feedback": "Die Dynamik...",
-    "tips": ["Tipp 1", "Tipp 2", "Tipp 3"]
-  }}
-}}"""
+Antworte NUR mit JSON (keine Backticks):
+{{"rhythm": {{"score": 7.5, "feedback": "...", "tips": ["...", "...", "..."]}}, "harmony": {{"score": 8.0, "feedback": "...", "tips": ["...", "...", "..."]}}, "melody": {{"score": 6.5, "feedback": "...", "tips": ["...", "...", "..."]}}, "articulation": {{"score": 7.0, "feedback": "...", "tips": ["...", "...", "..."]}}}}"""
         
-        print("🇨🇭 Calling Apertus API...")
-        
-        response = apertus_client.chat_completion(
-            model="swiss-ai/Apertus-70B-Instruct-2509",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1500,
-            temperature=0.7
-        )
-        
-        text = response.choices[0].message.content
-        clean = text.replace('```json', '').replace('```', '').strip()
-        
-        # Find JSON
-        if "{" in clean:
-            json_start = clean.find("{")
-            json_end = clean.rfind("}") + 1
-            clean = clean[json_start:json_end]
-        
-        feedback = json.loads(clean)
-        print("✅ Apertus feedback generated")
-        return feedback
-        
+        response = apertus_client.chat_completion(model="swiss-ai/Apertus-70B-Instruct-2509", messages=[{"role": "user", "content": prompt}], max_tokens=1500, temperature=0.7)
+        text = response.choices[0].message.content.replace('```json', '').replace('```', '').strip()
+        if "{" in text:
+            text = text[text.find("{"):text.rfind("}")+1]
+        return json.loads(text)
     except Exception as e:
-        print(f"Apertus API Fehler: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Apertus Error: {e}")
         return None
 
-
 def generate_rule_based_feedback(audio_features: Dict, jazz_analysis: Dict) -> Dict:
-    """Fallback: Regel-basiertes Feedback"""
     tempo_stability = audio_features.get("tempo_stability", 0.5)
     rhythm_complexity = audio_features.get("rhythm_complexity", 5)
     dynamic_range = audio_features.get("dynamics", {}).get("dynamic_range", 0.5)
     note_density = audio_features.get("note_density", 2)
     
-    rhythm_score = (tempo_stability * 5) + (5 if 3 <= rhythm_complexity <= 6 else 3)
-    rhythm_feedback = f"Timing-Stabilität bei {tempo_stability:.0%}. {jazz_analysis['rhythm_assessment']}. {jazz_analysis['tempo_reference']}."
-    
-    articulation_score = min(10, dynamic_range * 2 + 5)
-    articulation_feedback = f"Dynamik-Variation vorhanden. {jazz_analysis['density_assessment']}."
-    
     return {
-        "rhythm": {
-            "score": round(min(10, max(1, rhythm_score)), 1),
-            "feedback": rhythm_feedback,
-            "tips": [
-                f"Übe mit Metronom bei {audio_features.get('tempo', 120):.0f} BPM",
-                "Höre dir " + jazz_analysis['similar_artists'][0] + " für rhythmische Inspiration an",
-                f"Arbeite am {jazz_analysis['swing_feel']}"
-            ]
-        },
-        "harmony": {
-            "score": 7.0,
-            "feedback": "Harmonische Struktur erkannt. Arbeite an Voice Leading zwischen Akkorden.",
-            "tips": [
-                "Achte auf Guide Tones (3 und 7) bei ii-V-I",
-                "Nutze chromatische Approach-Töne",
-                "Studiere Bebop-Scales für dominante Akkorde"
-            ]
-        },
-        "melody": {
-            "score": 6.5 if 2 <= note_density <= 4 else 5.5,
-            "feedback": f"{jazz_analysis['density_assessment']}. Noten-Dichte: {note_density:.2f}/Sekunde.",
-            "tips": [
-                "Variiere Phrasenlängen",
-                "Nutze mehr Pausen zwischen Phrasen",
-                f"Studiere {', '.join(jazz_analysis['similar_artists'][:2])}"
-            ]
-        },
-        "articulation": {
-            "score": round(min(10, max(1, articulation_score)), 1),
-            "feedback": articulation_feedback,
-            "tips": [
-                "Arbeite an dynamischen Kontrasten",
-                "Nutze Akzente für rhythmische Betonung",
-                "Experimentiere mit verschiedenen Anschlagstärken"
-            ]
-        }
+        "rhythm": {"score": round(min(10, max(1, (tempo_stability * 5) + (5 if 3 <= rhythm_complexity <= 6 else 3))), 1), "feedback": f"Timing-Stabilität bei {tempo_stability:.0%}. {jazz_analysis['rhythm_assessment']}.", "tips": [f"Übe mit Metronom bei {audio_features.get('tempo', 120):.0f} BPM", f"Höre {jazz_analysis['similar_artists'][0]}", f"Arbeite am {jazz_analysis['swing_feel']}"]},
+        "harmony": {"score": 7.0, "feedback": "Harmonische Struktur erkannt.", "tips": ["Achte auf Guide Tones (3 und 7)", "Nutze chromatische Approach-Töne", "Studiere Bebop-Scales"]},
+        "melody": {"score": 6.5 if 2 <= note_density <= 4 else 5.5, "feedback": f"{jazz_analysis['density_assessment']}.", "tips": ["Variiere Phrasenlängen", "Nutze mehr Pausen", f"Studiere {', '.join(jazz_analysis['similar_artists'][:2])}"]},
+        "articulation": {"score": round(min(10, max(1, dynamic_range * 2 + 5)), 1), "feedback": f"Dynamik-Variation vorhanden. {jazz_analysis['density_assessment']}.", "tips": ["Arbeite an dynamischen Kontrasten", "Nutze Akzente", "Experimentiere mit Anschlagstärken"]}
     }
-
 
 # ============================================================================
 # BACKGROUND PROCESSING
 # ============================================================================
 
 def process_midi_in_background(analysis_id: str, tmp_path: str):
-    """Background task for MIDI analysis + Apertus"""
-    import asyncio
-    import gc
-    
+    import asyncio, gc
     try:
-        # Step 1: MIDI Analysis
         analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
-        print(f"🎹 Starting MIDI analysis for {tmp_path}")
-        
         note_analysis = analyze_midi_file(tmp_path)
-        
         if note_analysis.get('error') or note_analysis.get('total_notes', 0) == 0:
-            raise Exception(f"MIDI analysis failed: {note_analysis.get('error', 'No notes found')}")
+            raise Exception(f"MIDI failed: {note_analysis.get('error', 'No notes')}")
         
-        print(f"✅ MIDI analysis complete: {note_analysis.get('total_notes')} notes")
-        
-        # Create audio_features from MIDI data (for compatibility)
-        duration = note_analysis.get('duration', 1)
-        if duration <= 0:
-            duration = 1
-            
+        duration = max(1, note_analysis.get('duration', 1))
         audio_features = {
-            "duration": duration,
-            "tempo": note_analysis.get('tempo_bpm', 120),
+            "duration": duration, "tempo": note_analysis.get('tempo_bpm', 120),
             "tempo_stability": note_analysis.get('timing', {}).get('precision_score', 0.8),
-            "beats": 0,
-            "onsets": note_analysis.get('total_notes', 0),
             "note_density": note_analysis.get('total_notes', 0) / duration,
-            "pitch_range": {
-                "min": note_analysis.get('pitch_range', {}).get('min', 0),
-                "max": note_analysis.get('pitch_range', {}).get('max', 0),
-                "mean": (note_analysis.get('pitch_range', {}).get('min', 60) + note_analysis.get('pitch_range', {}).get('max', 60)) / 2
-            },
-            "dynamics": {
-                "mean_rms": note_analysis.get('dynamics', {}).get('mean', 80) / 127,
-                "max_rms": note_analysis.get('dynamics', {}).get('max', 100) / 127,
-                "dynamic_range": note_analysis.get('dynamics', {}).get('range', 40) / 127,
-                "variance": note_analysis.get('dynamics', {}).get('std', 20) / 127
-            },
-            "spectral": {
-                "centroid_mean": 2000,
-                "centroid_std": 500,
-                "rolloff_mean": 4000,
-                "flatness_mean": 0.1
-            },
+            "pitch_range": {"min": note_analysis.get('pitch_range', {}).get('min', 0), "max": note_analysis.get('pitch_range', {}).get('max', 0)},
+            "dynamics": {"mean_rms": note_analysis.get('dynamics', {}).get('mean', 80) / 127, "dynamic_range": note_analysis.get('dynamics', {}).get('range', 40) / 127},
             "rhythm_complexity": min(10, max(1, note_analysis.get('timing', {}).get('std_interval', 0.5) * 10)),
-            "harmonic_content": 0.5
         }
         
-        # Step 2: Jazz Pattern Analysis
         jazz_analysis = analyze_jazz_patterns(audio_features)
-        
         gc.collect()
         
-        # Step 3: Apertus AI
         analysis_results[analysis_id] = {"status": "processing", "stage": "ai"}
-        
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        feedback = loop.run_until_complete(
-            get_apertus_feedback(audio_features, jazz_analysis, note_analysis)
-        )
+        feedback = loop.run_until_complete(get_apertus_feedback(audio_features, jazz_analysis, note_analysis))
         loop.close()
         
-        if not feedback:
-            print("⚠️ Apertus failed, using rule-based feedback")
-            feedback = generate_rule_based_feedback(audio_features, jazz_analysis)
+        if not feedback: feedback = generate_rule_based_feedback(audio_features, jazz_analysis)
         
-        overall_score = (
-            feedback["rhythm"]["score"] +
-            feedback["harmony"]["score"] +
-            feedback["melody"]["score"] +
-            feedback["articulation"]["score"]
-        ) / 4
+        overall_score = (feedback["rhythm"]["score"] + feedback["harmony"]["score"] + feedback["melody"]["score"] + feedback["articulation"]["score"]) / 4
         
-        result = {
-            "overall_score": round(overall_score, 1),
-            "audio_features": audio_features,
-            "jazz_analysis": jazz_analysis,
-            "note_analysis": note_analysis,
-            "feedback": feedback,
-            "ai_generated": apertus_client is not None
-        }
-        
-        analysis_results[analysis_id] = {
-            "status": "completed",
-            "result": result
-        }
-        
-        gc.collect()
-        print("✅ Analysis complete!")
-        
+        analysis_results[analysis_id] = {"status": "completed", "result": {
+            "overall_score": round(overall_score, 1), "audio_features": audio_features,
+            "jazz_analysis": jazz_analysis, "note_analysis": note_analysis,
+            "feedback": feedback, "ai_generated": apertus_client is not None
+        }}
     except Exception as e:
-        print(f"❌ Error in MIDI processing: {e}")
-        import traceback
-        traceback.print_exc()
-        analysis_results[analysis_id] = {
-            "status": "error",
-            "error": str(e)
-        }
-        gc.collect()
+        import traceback; traceback.print_exc()
+        analysis_results[analysis_id] = {"status": "error", "error": str(e)}
     finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        gc.collect()
-
+        if os.path.exists(tmp_path): os.unlink(tmp_path)
 
 # ============================================================================
 # API ENDPOINTS
@@ -801,37 +587,22 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
 @app.post("/analyze-async")
 async def analyze_midi_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     if not (file.filename.endswith('.mid') or file.filename.endswith('.midi')):
-        raise HTTPException(status_code=400, detail="Nur MIDI-Dateien erlaubt (.mid, .midi)")
-    
+        raise HTTPException(status_code=400, detail="Nur MIDI-Dateien erlaubt")
     analysis_id = str(uuid.uuid4())
-    
-    # Save as .mid (not .mp3!)
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mid') as tmp:
-        content = await file.read()
-        tmp.write(content)
+        tmp.write(await file.read())
         tmp_path = tmp.name
-    
     background_tasks.add_task(process_midi_in_background, analysis_id, tmp_path)
-    
     return {"analysis_id": analysis_id, "status": "processing"}
-
 
 @app.get("/result/{analysis_id}")
 async def get_result(analysis_id: str):
-    if analysis_id not in analysis_results:
-        raise HTTPException(status_code=404, detail="Analysis not found")
-    
+    if analysis_id not in analysis_results: raise HTTPException(status_code=404, detail="Not found")
     return analysis_results[analysis_id]
-
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "ai_enabled": apertus_client is not None,
-        "analysis_type": "MIDI with Sheet Music"
-    }
-
+    return {"status": "healthy", "ai_enabled": apertus_client is not None, "analysis_type": "MIDI Grand Staff"}
 
 if __name__ == "__main__":
     import uvicorn
