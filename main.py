@@ -1,5 +1,5 @@
-# Jazz Improvisation Feedback Platform - MIDI VERSION
-# FastAPI + MIDI Analysis + Apertus AI + RAG
+# Jazz Improvisation Feedback Platform - MIDI VERSION WITH SHEET MUSIC
+# FastAPI + MIDI Analysis + Apertus AI + ABC Notation
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,7 +48,7 @@ initialize_apertus()
 analysis_results = {}
 
 # ============================================================================
-# WEB UI
+# WEB UI WITH SHEET MUSIC
 # ============================================================================
 
 HTML_TEMPLATE = """
@@ -59,6 +59,14 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jazz Feedback - MIDI Analyse</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ABCJS for Sheet Music Rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.2.2/dist/abcjs-basic-min.js"></script>
+    <style>
+        .abcjs-container svg {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
 </head>
 <body class="bg-gradient-to-br from-red-50 via-white to-white min-h-screen">
     <div class="max-w-4xl mx-auto p-6">
@@ -69,7 +77,7 @@ HTML_TEMPLATE = """
                 </svg>
             </div>
             <h1 class="text-4xl font-bold text-gray-900 mb-2">Jazz-Improvisation Feedback</h1>
-            <p class="text-gray-600">🇨🇭 Apertus AI + 🎹 MIDI Analyse</p>
+            <p class="text-gray-600">🇨🇭 Apertus AI + 🎹 MIDI Analyse + 🎼 Notenschrift</p>
         </div>
 
         <div id="aiStatus" class="mb-6"></div>
@@ -111,7 +119,7 @@ HTML_TEMPLATE = """
             .then(data => {
                 const statusDiv = document.getElementById('aiStatus');
                 if (data.ai_enabled) {
-                    statusDiv.innerHTML = '<div class="bg-gradient-to-r from-red-50 to-white border border-red-200 rounded-xl p-4"><div class="flex items-center gap-3"><svg class="w-8 h-8 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg><div><div class="text-sm font-medium text-red-900">🇨🇭 Apertus AI + 🎹 MIDI Analyse aktiv</div><div class="text-xs text-red-700">Akkord-Erkennung & Swiss AI Feedback</div></div></div></div>';
+                    statusDiv.innerHTML = '<div class="bg-gradient-to-r from-red-50 to-white border border-red-200 rounded-xl p-4"><div class="flex items-center gap-3"><svg class="w-8 h-8 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg><div><div class="text-sm font-medium text-red-900">🇨🇭 Apertus AI + 🎹 MIDI + 🎼 Notenschrift</div><div class="text-xs text-red-700">Akkord-Erkennung & Swiss AI Feedback</div></div></div></div>';
                 } else {
                     statusDiv.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4"><span class="text-sm font-medium text-yellow-900">⚠️ AI deaktiviert - Nutze regel-basiertes Feedback</span></div>';
                 }
@@ -207,12 +215,110 @@ HTML_TEMPLATE = """
             }, 3000);
         }
 
+        // Convert MIDI note to ABC notation
+        function midiToAbc(midiNote) {
+            const noteNames = ['C', '^C', 'D', '^D', 'E', 'F', '^F', 'G', '^G', 'A', '^A', 'B'];
+            const octave = Math.floor(midiNote / 12) - 1;
+            const noteName = noteNames[midiNote % 12];
+            
+            // ABC notation: C4 = C, C5 = c, C6 = c', C3 = C,
+            if (octave === 4) {
+                return noteName;
+            } else if (octave === 5) {
+                return noteName.toLowerCase();
+            } else if (octave === 6) {
+                return noteName.toLowerCase() + "'";
+            } else if (octave === 7) {
+                return noteName.toLowerCase() + "''";
+            } else if (octave === 3) {
+                return noteName + ",";
+            } else if (octave === 2) {
+                return noteName + ",,";
+            } else if (octave === 1) {
+                return noteName + ",,,";
+            }
+            return noteName;
+        }
+
+        // Generate ABC notation from chords
+        function generateAbcNotation(chords, key) {
+            let abc = "X:1\\n";
+            abc += "T:Erkannte Akkorde\\n";
+            abc += "M:4/4\\n";
+            abc += "L:1/4\\n";
+            abc += "K:" + (key ? key.split(' ')[0] : 'C') + "\\n";
+            abc += "|";
+            
+            chords.forEach((chord, index) => {
+                // Add chord symbol
+                abc += '"' + chord.symbol + '"';
+                
+                // Add notes as chord (stacked)
+                if (chord.pitches && chord.pitches.length > 0) {
+                    abc += '[';
+                    chord.pitches.forEach(pitch => {
+                        abc += midiToAbc(pitch);
+                    });
+                    abc += ']';
+                }
+                
+                // Add bar line every chord for clarity
+                abc += ' |';
+            });
+            
+            return abc;
+        }
+
+        // Generate ABC for melody/notes sequence
+        function generateMelodyAbc(notes, key) {
+            let abc = "X:2\\n";
+            abc += "T:Noten-Sequenz\\n";
+            abc += "M:4/4\\n";
+            abc += "L:1/8\\n";
+            abc += "K:" + (key ? key.split(' ')[0] : 'C') + "\\n";
+            
+            let noteCount = 0;
+            notes.slice(0, 32).forEach((note, index) => {
+                abc += midiToAbc(note.pitch);
+                noteCount++;
+                
+                // Add bar line every 8 notes
+                if (noteCount % 8 === 0) {
+                    abc += ' |';
+                } else {
+                    abc += ' ';
+                }
+            });
+            
+            if (notes.length > 32) {
+                abc += '... (' + (notes.length - 32) + ' weitere)';
+            }
+            
+            return abc;
+        }
+
         function displayResults(data) {
             const getScoreColor = (score) => score >= 8 ? 'green' : score >= 6 ? 'yellow' : 'orange';
             let html = '';
 
             if (data.ai_generated) {
                 html += '<div class="bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl p-4 mb-6"><div class="flex items-center gap-2"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M13 7H7v6h6V7z"/></svg><span class="font-semibold">🇨🇭 Feedback von Apertus AI</span></div></div>';
+            }
+
+            // SHEET MUSIC - CHORDS (NEU!)
+            if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
+                html += '<div class="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4 shadow-lg">';
+                html += '<h3 class="font-bold text-xl text-gray-900 mb-4">🎼 Notenschrift - Akkorde</h3>';
+                html += '<div id="sheetMusic" class="bg-gray-50 rounded-xl p-4 overflow-x-auto"></div>';
+                html += '</div>';
+            }
+
+            // SHEET MUSIC - MELODY (NEU!)
+            if (data.note_analysis && data.note_analysis.notes && data.note_analysis.notes.length > 0) {
+                html += '<div class="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4 shadow-lg">';
+                html += '<h3 class="font-bold text-xl text-gray-900 mb-4">🎵 Notenschrift - Melodie</h3>';
+                html += '<div id="melodySheet" class="bg-gray-50 rounded-xl p-4 overflow-x-auto"></div>';
+                html += '</div>';
             }
 
             // NOTE DETECTION
@@ -228,7 +334,7 @@ HTML_TEMPLATE = """
                 html += '</div>';
             }
 
-            // CHORD DETECTION
+            // CHORD DETECTION (Text version)
             if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
                 html += '<div class="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-6 mb-4">';
                 html += '<h3 class="font-semibold text-blue-900 mb-4">🎼 Erkannte Akkorde</h3>';
@@ -260,26 +366,6 @@ HTML_TEMPLATE = """
                 html += '</div>';
             }
 
-            // NOTES TIMELINE
-            if (data.note_analysis && data.note_analysis.notes && data.note_analysis.notes.length > 0) {
-                html += '<div class="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6 mb-4">';
-                html += '<h3 class="font-semibold text-green-900 mb-4">🎵 Noten-Sequenz</h3>';
-                html += '<div class="flex flex-wrap gap-1">';
-                const notesToShow = data.note_analysis.notes.slice(0, 40);
-                notesToShow.forEach((note, idx) => {
-                    const velocity = Math.round((note.velocity / 127) * 100);
-                    const opacity = 0.4 + (velocity / 100) * 0.6;
-                    html += '<div class="bg-green-500 text-white text-xs px-2 py-1 rounded" style="opacity: ' + opacity + '" title="Velocity: ' + velocity + '%">';
-                    html += note.note_name;
-                    html += '</div>';
-                });
-                if (data.note_analysis.notes.length > 40) {
-                    html += '<div class="text-gray-400 text-sm px-2 py-1">... +' + (data.note_analysis.notes.length - 40) + ' weitere</div>';
-                }
-                html += '</div>';
-                html += '</div>';
-            }
-
             // JAZZ CONTEXT
             html += '<div class="bg-gradient-to-br from-red-50 to-pink-50 border border-red-200 rounded-xl p-6 mb-4"><h3 class="font-semibold text-red-900 mb-4">🎷 Jazz-Kontext</h3><div class="space-y-2 text-sm"><p><strong>Tempo:</strong> ' + data.jazz_analysis.tempo_category + '</p><p class="text-red-700">' + data.jazz_analysis.tempo_reference + '</p><p><strong>Rhythmik:</strong> ' + data.jazz_analysis.rhythm_assessment + '</p><p><strong>Dichte:</strong> ' + data.jazz_analysis.density_assessment + '</p><p><strong>Swing:</strong> ' + data.jazz_analysis.swing_feel + '</p><p><strong>Ähnlich:</strong> ' + data.jazz_analysis.similar_artists.join(', ') + '</p></div></div>';
 
@@ -304,6 +390,35 @@ HTML_TEMPLATE = """
             });
 
             document.getElementById('results').innerHTML = html;
+
+            // Render Sheet Music with ABCJS
+            setTimeout(() => {
+                if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
+                    const key = data.note_analysis.detected_scale || 'C Major';
+                    const abcChords = generateAbcNotation(data.note_analysis.chords, key);
+                    console.log('ABC Chords:', abcChords);
+                    
+                    if (typeof ABCJS !== 'undefined') {
+                        ABCJS.renderAbc('sheetMusic', abcChords.replace(/\\\\n/g, '\\n'), {
+                            responsive: 'resize',
+                            add_classes: true
+                        });
+                    }
+                }
+
+                if (data.note_analysis && data.note_analysis.notes && data.note_analysis.notes.length > 0) {
+                    const key = data.note_analysis.detected_scale || 'C Major';
+                    const abcMelody = generateMelodyAbc(data.note_analysis.notes, key);
+                    console.log('ABC Melody:', abcMelody);
+                    
+                    if (typeof ABCJS !== 'undefined') {
+                        ABCJS.renderAbc('melodySheet', abcMelody.replace(/\\\\n/g, '\\n'), {
+                            responsive: 'resize',
+                            add_classes: true
+                        });
+                    }
+                }
+            }, 100);
         }
     </script>
 </body>
@@ -714,7 +829,7 @@ async def health_check():
     return {
         "status": "healthy",
         "ai_enabled": apertus_client is not None,
-        "analysis_type": "MIDI"
+        "analysis_type": "MIDI with Sheet Music"
     }
 
 
