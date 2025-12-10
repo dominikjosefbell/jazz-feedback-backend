@@ -1,7 +1,7 @@
-# Jazz Improvisation Feedback Platform - MIDI VERSION WITH PIANO SHEET MUSIC
-# FastAPI + MIDI Analysis + Apertus AI + Grand Staff Notation
+# Jazz Improvisation Feedback Platform - MIDI VERSION
+# With Key Selector + Modulation Detection + Grand Staff Notation
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import numpy as np
@@ -17,7 +17,6 @@ from huggingface_hub import InferenceClient
 
 app = FastAPI(title="Jazz Feedback API - MIDI")
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,11 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Apertus API Client
 apertus_client = None
 
 def initialize_apertus():
-    """Initialize Apertus via Hugging Face"""
     global apertus_client
     try:
         hf_token = os.environ.get("HF_TOKEN")
@@ -44,11 +41,10 @@ def initialize_apertus():
 
 initialize_apertus()
 
-# In-Memory Storage
 analysis_results = {}
 
 # ============================================================================
-# WEB UI WITH GRAND STAFF NOTATION
+# WEB UI WITH KEY SELECTOR
 # ============================================================================
 
 HTML_TEMPLATE = """
@@ -59,7 +55,6 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jazz Feedback - MIDI Analyse</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- ABCJS for Sheet Music Rendering -->
     <script src="https://cdn.jsdelivr.net/npm/abcjs@6.2.2/dist/abcjs-basic-min.js"></script>
     <style>
         .abcjs-container svg { max-width: 100%; height: auto; }
@@ -82,7 +77,9 @@ HTML_TEMPLATE = """
 
         <div class="bg-white rounded-2xl shadow-lg p-8 mb-6">
             <input type="file" id="fileInput" accept=".mid,.midi" class="hidden">
-            <div id="dropzone" class="border-3 border-dashed border-red-300 rounded-xl p-12 text-center cursor-pointer hover:border-red-500 hover:bg-red-50 transition-all">
+            
+            <!-- File Upload -->
+            <div id="dropzone" class="border-3 border-dashed border-red-300 rounded-xl p-12 text-center cursor-pointer hover:border-red-500 hover:bg-red-50 transition-all mb-6">
                 <svg class="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
@@ -90,7 +87,43 @@ HTML_TEMPLATE = """
                 <p class="text-sm text-gray-500">MIDI-Dateien (.mid, .midi)</p>
             </div>
 
-            <button id="analyzeBtn" class="w-full mt-6 bg-red-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors hidden">
+            <!-- Key Selector -->
+            <div id="keySelector" class="hidden mb-6">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">🎼 Tonart auswählen:</label>
+                <select id="keySelect" class="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all text-lg">
+                    <optgroup label="Dur-Tonarten">
+                        <option value="C Major">C-Dur (keine Vorzeichen)</option>
+                        <option value="G Major">G-Dur (1♯)</option>
+                        <option value="D Major">D-Dur (2♯)</option>
+                        <option value="A Major">A-Dur (3♯)</option>
+                        <option value="E Major">E-Dur (4♯)</option>
+                        <option value="B Major">H-Dur (5♯)</option>
+                        <option value="F# Major">Fis-Dur (6♯)</option>
+                        <option value="F Major">F-Dur (1♭)</option>
+                        <option value="Bb Major">B-Dur (2♭)</option>
+                        <option value="Eb Major">Es-Dur (3♭)</option>
+                        <option value="Ab Major">As-Dur (4♭)</option>
+                        <option value="Db Major">Des-Dur (5♭)</option>
+                        <option value="Gb Major">Ges-Dur (6♭)</option>
+                    </optgroup>
+                    <optgroup label="Moll-Tonarten">
+                        <option value="A Minor">a-Moll (keine Vorzeichen)</option>
+                        <option value="E Minor">e-Moll (1♯)</option>
+                        <option value="B Minor">h-Moll (2♯)</option>
+                        <option value="F# Minor">fis-Moll (3♯)</option>
+                        <option value="C# Minor">cis-Moll (4♯)</option>
+                        <option value="G# Minor">gis-Moll (5♯)</option>
+                        <option value="D Minor">d-Moll (1♭)</option>
+                        <option value="G Minor">g-Moll (2♭)</option>
+                        <option value="C Minor">c-Moll (3♭)</option>
+                        <option value="F Minor">f-Moll (4♭)</option>
+                        <option value="Bb Minor">b-Moll (5♭)</option>
+                    </optgroup>
+                </select>
+                <p class="text-xs text-gray-500 mt-2">💡 Modulationen werden automatisch mit Vorzeichen angezeigt</p>
+            </div>
+
+            <button id="analyzeBtn" class="w-full bg-red-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors hidden">
                 🎵 MIDI Analyse starten
             </button>
         </div>
@@ -127,7 +160,10 @@ HTML_TEMPLATE = """
             const file = e.target.files[0];
             if (file && (file.name.endsWith('.mid') || file.name.endsWith('.midi'))) {
                 selectedFile = file;
-                document.getElementById('fileName').textContent = file.name;
+                document.getElementById('fileName').textContent = '✓ ' + file.name;
+                document.getElementById('dropzone').classList.add('border-green-400', 'bg-green-50');
+                document.getElementById('dropzone').classList.remove('border-red-300');
+                document.getElementById('keySelector').classList.remove('hidden');
                 document.getElementById('analyzeBtn').classList.remove('hidden');
             } else {
                 alert('Bitte eine MIDI-Datei (.mid oder .midi) auswählen');
@@ -136,6 +172,9 @@ HTML_TEMPLATE = """
 
         document.getElementById('analyzeBtn').addEventListener('click', async () => {
             if (!selectedFile) return;
+            
+            const selectedKey = document.getElementById('keySelect').value;
+            
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('results').innerHTML = '';
             document.getElementById('loadingText').textContent = 'Uploading...';
@@ -143,6 +182,7 @@ HTML_TEMPLATE = """
 
             const formData = new FormData();
             formData.append('file', selectedFile);
+            formData.append('key', selectedKey);
 
             try {
                 const response = await fetch('/analyze-async', { method: 'POST', body: formData });
@@ -191,37 +231,100 @@ HTML_TEMPLATE = """
             }, 3000);
         }
 
-        // ABC Notation Helper - MIDI to ABC for Treble Clef
-        function midiToAbcTreble(midiNote) {
-            const noteNames = ['C', '^C', 'D', '^D', 'E', 'F', '^F', 'G', '^G', 'A', '^A', 'B'];
+        // Key signature data for ABC notation
+        const keySignatures = {
+            'C Major': '', 'A Minor': '',
+            'G Major': '^F', 'E Minor': '^F',
+            'D Major': '^F^C', 'B Minor': '^F^C',
+            'A Major': '^F^C^G', 'F# Minor': '^F^C^G',
+            'E Major': '^F^C^G^D', 'C# Minor': '^F^C^G^D',
+            'B Major': '^F^C^G^D^A', 'G# Minor': '^F^C^G^D^A',
+            'F# Major': '^F^C^G^D^A^E', 
+            'F Major': '_B', 'D Minor': '_B',
+            'Bb Major': '_B_E', 'G Minor': '_B_E',
+            'Eb Major': '_B_E_A', 'C Minor': '_B_E_A',
+            'Ab Major': '_B_E_A_D', 'F Minor': '_B_E_A_D',
+            'Db Major': '_B_E_A_D_G', 'Bb Minor': '_B_E_A_D_G',
+            'Gb Major': '_B_E_A_D_G_C'
+        };
+
+        // Notes in key (for detecting accidentals)
+        const keyNotes = {
+            'C Major': [0, 2, 4, 5, 7, 9, 11],
+            'G Major': [0, 2, 4, 6, 7, 9, 11],
+            'D Major': [1, 2, 4, 6, 7, 9, 11],
+            'A Major': [1, 2, 4, 6, 8, 9, 11],
+            'E Major': [1, 3, 4, 6, 8, 9, 11],
+            'B Major': [1, 3, 4, 6, 8, 10, 11],
+            'F# Major': [1, 3, 5, 6, 8, 10, 11],
+            'F Major': [0, 2, 4, 5, 7, 9, 10],
+            'Bb Major': [0, 2, 3, 5, 7, 9, 10],
+            'Eb Major': [0, 2, 3, 5, 7, 8, 10],
+            'Ab Major': [0, 1, 3, 5, 7, 8, 10],
+            'Db Major': [0, 1, 3, 5, 6, 8, 10],
+            'Gb Major': [0, 1, 3, 4, 6, 8, 10],
+            'A Minor': [0, 2, 4, 5, 7, 9, 11],
+            'E Minor': [0, 2, 4, 6, 7, 9, 11],
+            'B Minor': [1, 2, 4, 6, 7, 9, 11],
+            'F# Minor': [1, 2, 4, 6, 8, 9, 11],
+            'C# Minor': [1, 3, 4, 6, 8, 9, 11],
+            'G# Minor': [1, 3, 4, 6, 8, 10, 11],
+            'D Minor': [0, 2, 4, 5, 7, 9, 10],
+            'G Minor': [0, 2, 3, 5, 7, 9, 10],
+            'C Minor': [0, 2, 3, 5, 7, 8, 10],
+            'F Minor': [0, 1, 3, 5, 7, 8, 10],
+            'Bb Minor': [0, 1, 3, 5, 6, 8, 10]
+        };
+
+        // Convert MIDI to ABC with accidentals relative to key
+        function midiToAbcInKey(midiNote, userKey, clef) {
+            const noteNames = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
             const octave = Math.floor(midiNote / 12) - 1;
-            const note = noteNames[midiNote % 12];
-            if (octave === 4) return note;
-            if (octave === 5) return note.toLowerCase();
-            if (octave === 6) return note.toLowerCase() + "'";
-            if (octave === 7) return note.toLowerCase() + "''";
-            if (octave === 3) return note + ",";
-            if (octave === 2) return note + ",,";
-            return note;
+            const pc = midiNote % 12;
+            
+            // Get notes in the key
+            const inKeyNotes = keyNotes[userKey] || keyNotes['C Major'];
+            
+            // Determine if this note needs an accidental
+            let accidental = '';
+            let noteName = noteNames[pc];
+            
+            if (!inKeyNotes.includes(pc)) {
+                // This note is not in the key - needs accidental
+                // Determine if it should be sharp or flat based on context
+                if (pc === 1) { accidental = userKey.includes('b') || userKey.includes('F') ? '_D' : '^C'; noteName = pc === 1 && accidental.includes('_') ? 'D' : 'C'; accidental = accidental[0]; }
+                else if (pc === 3) { accidental = userKey.includes('b') || userKey.includes('F') ? '_E' : '^D'; noteName = pc === 3 && accidental.includes('_') ? 'E' : 'D'; accidental = accidental[0]; }
+                else if (pc === 6) { accidental = userKey.includes('b') ? '_G' : '^F'; noteName = pc === 6 && accidental.includes('_') ? 'G' : 'F'; accidental = accidental[0]; }
+                else if (pc === 8) { accidental = userKey.includes('b') ? '_A' : '^G'; noteName = pc === 8 && accidental.includes('_') ? 'A' : 'G'; accidental = accidental[0]; }
+                else if (pc === 10) { accidental = userKey.includes('#') ? '^A' : '_B'; noteName = pc === 10 && accidental.includes('^') ? 'A' : 'B'; accidental = accidental[0]; }
+            }
+            
+            // Convert to ABC octave notation
+            let abcNote = accidental + noteName;
+            
+            if (clef === 'treble') {
+                if (octave === 4) { /* middle octave - uppercase */ }
+                else if (octave === 5) { abcNote = accidental + noteName.toLowerCase(); }
+                else if (octave === 6) { abcNote = accidental + noteName.toLowerCase() + "'"; }
+                else if (octave === 7) { abcNote = accidental + noteName.toLowerCase() + "''"; }
+                else if (octave === 3) { abcNote = accidental + noteName + ","; }
+                else if (octave === 2) { abcNote = accidental + noteName + ",,"; }
+            } else { // bass
+                if (octave === 2) { abcNote = accidental + noteName + ","; }
+                else if (octave === 3) { abcNote = accidental + noteName; }
+                else if (octave === 4) { abcNote = accidental + noteName.toLowerCase(); }
+                else if (octave === 1) { abcNote = accidental + noteName + ",,"; }
+                else { abcNote = accidental + noteName + ","; }
+            }
+            
+            return abcNote;
         }
 
-        // ABC Notation Helper - MIDI to ABC for Bass Clef
-        function midiToAbcBass(midiNote) {
-            const noteNames = ['C', '^C', 'D', '^D', 'E', 'F', '^F', 'G', '^G', 'A', '^A', 'B'];
-            const octave = Math.floor(midiNote / 12) - 1;
-            const note = noteNames[midiNote % 12];
-            if (octave === 2) return note + ",";
-            if (octave === 3) return note;
-            if (octave === 4) return note.toLowerCase();
-            if (octave === 1) return note + ",,";
-            return note + ",";
-        }
-
-        // Generate Grand Staff (Piano) ABC Notation
-        function generateGrandStaffAbc(notes, chords, key, tempo) {
+        // Generate Grand Staff with user-specified key
+        function generateGrandStaffAbc(notes, chords, userKey, tempo) {
             const middleC = 60;
             const bpm = tempo || 120;
-            const beatDuration = 60 / bpm; // seconds per beat
+            const beatDuration = 60 / bpm;
             
             // Group notes by beat
             const timeGroups = {};
@@ -247,19 +350,25 @@ HTML_TEMPLATE = """
             const beats = Object.keys(timeGroups).map(Number).sort((a, b) => a - b);
             const maxBeats = Math.min(beats.length, 32);
             
-            // Extract key for ABC
-            let abcKey = 'C';
-            if (key) {
-                const keyMatch = key.match(/^([A-G][#b]?)/);
-                if (keyMatch) abcKey = keyMatch[1].replace('#', '^').replace('b', '_');
-            }
+            // Get ABC key from user selection
+            let abcKey = userKey.split(' ')[0];
+            if (abcKey === 'Bb') abcKey = '_B';
+            else if (abcKey === 'Eb') abcKey = '_E';
+            else if (abcKey === 'Ab') abcKey = '_A';
+            else if (abcKey === 'Db') abcKey = '_D';
+            else if (abcKey === 'Gb') abcKey = '_G';
+            else if (abcKey === 'F#') abcKey = '^F';
+            else if (abcKey === 'C#') abcKey = '^C';
+            else if (abcKey === 'G#') abcKey = '^G';
+            
+            const mode = userKey.includes('Minor') ? 'm' : '';
 
             let abc = "X:1\\n";
             abc += "T:MIDI Analyse\\n";
             abc += "M:4/4\\n";
             abc += "L:1/4\\n";
             abc += "Q:1/4=" + bpm + "\\n";
-            abc += "K:" + abcKey + "\\n";
+            abc += "K:" + abcKey + mode + "\\n";
             abc += "%%staves {1 2}\\n";
             abc += "V:1 clef=treble\\n";
             abc += "V:2 clef=bass\\n";
@@ -277,10 +386,12 @@ HTML_TEMPLATE = """
                 if (!group.treble || group.treble.length === 0) {
                     abc += "z";
                 } else if (group.treble.length === 1) {
-                    abc += midiToAbcTreble(group.treble[0]);
+                    abc += midiToAbcInKey(group.treble[0], userKey, 'treble');
                 } else {
                     abc += "[";
-                    group.treble.sort((a,b) => a-b).forEach(p => abc += midiToAbcTreble(p));
+                    group.treble.sort((a,b) => a-b).forEach(p => {
+                        abc += midiToAbcInKey(p, userKey, 'treble');
+                    });
                     abc += "]";
                 }
                 count++;
@@ -300,10 +411,12 @@ HTML_TEMPLATE = """
                 if (!group.bass || group.bass.length === 0) {
                     abc += "z";
                 } else if (group.bass.length === 1) {
-                    abc += midiToAbcBass(group.bass[0]);
+                    abc += midiToAbcInKey(group.bass[0], userKey, 'bass');
                 } else {
                     abc += "[";
-                    group.bass.sort((a,b) => a-b).forEach(p => abc += midiToAbcBass(p));
+                    group.bass.sort((a,b) => a-b).forEach(p => {
+                        abc += midiToAbcInKey(p, userKey, 'bass');
+                    });
                     abc += "]";
                 }
                 count++;
@@ -318,16 +431,18 @@ HTML_TEMPLATE = """
         function displayResults(data) {
             const getScoreColor = (score) => score >= 8 ? 'green' : score >= 6 ? 'yellow' : 'orange';
             let html = '';
+            
+            const userKey = data.user_key || 'C Major';
 
             if (data.ai_generated) {
                 html += '<div class="bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl p-4 mb-6"><div class="flex items-center gap-2"><span class="font-semibold">🇨🇭 Feedback von Apertus AI</span></div></div>';
             }
 
-            // GRAND STAFF SHEET MUSIC (Single Piano Display)
+            // GRAND STAFF SHEET MUSIC
             if (data.note_analysis && data.note_analysis.notes && data.note_analysis.notes.length > 0) {
                 html += '<div class="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4 shadow-lg">';
                 html += '<h3 class="font-bold text-xl text-gray-900 mb-2">🎼 Notenschrift</h3>';
-                html += '<p class="text-sm text-gray-500 mb-4">Klaviersystem mit Violin- und Bassschlüssel</p>';
+                html += '<p class="text-sm text-gray-500 mb-4">Tonart: <strong>' + userKey + '</strong> • Chromatische Noten werden mit Vorzeichen angezeigt</p>';
                 html += '<div id="pianoSheet" class="bg-gray-50 rounded-xl p-4 overflow-x-auto min-h-[200px]"></div>';
                 html += '</div>';
             }
@@ -340,7 +455,7 @@ HTML_TEMPLATE = """
                 html += '<div><strong>Anzahl:</strong> ' + data.note_analysis.total_notes + '</div>';
                 html += '<div><strong>Tonumfang:</strong> ' + data.note_analysis.pitch_range.min_note + ' - ' + data.note_analysis.pitch_range.max_note + '</div>';
                 html += '<div><strong>Häufigste:</strong> ' + data.note_analysis.most_common_notes.join(', ') + '</div>';
-                html += '<div><strong>Tonart:</strong> ' + (data.note_analysis.detected_scale || 'unbekannt') + '</div>';
+                html += '<div><strong>Gewählte Tonart:</strong> ' + userKey + '</div>';
                 html += '</div></div>';
             }
 
@@ -398,13 +513,12 @@ HTML_TEMPLATE = """
 
             document.getElementById('results').innerHTML = html;
 
-            // Render Grand Staff
+            // Render Grand Staff with USER KEY
             setTimeout(() => {
                 if (data.note_analysis && data.note_analysis.notes && data.note_analysis.notes.length > 0) {
-                    const key = data.note_analysis.detected_scale || 'C Major';
                     const chords = data.note_analysis.chords || [];
                     const tempo = data.audio_features.tempo || 120;
-                    const abcNotation = generateGrandStaffAbc(data.note_analysis.notes, chords, key, tempo);
+                    const abcNotation = generateGrandStaffAbc(data.note_analysis.notes, chords, userKey, tempo);
                     console.log('ABC:', abcNotation.replace(/\\\\n/g, '\\n'));
                     
                     if (typeof ABCJS !== 'undefined') {
@@ -434,7 +548,7 @@ async def root():
 
 @app.get("/ai-status")
 async def ai_status():
-    return {"ai_enabled": apertus_client is not None, "model": "swiss-ai/Apertus-70B-Instruct-2509" if apertus_client else None, "note_detection": "MIDI Analysis"}
+    return {"ai_enabled": apertus_client is not None, "model": "swiss-ai/Apertus-70B-Instruct-2509" if apertus_client else None}
 
 # ============================================================================
 # JAZZ PATTERN ANALYSIS
@@ -458,7 +572,6 @@ def analyze_jazz_patterns(audio_features: Dict) -> Dict:
     elif 2 <= note_density < 4: density_assessment = "Ausgewogene Dichte (Mainstream Jazz)"
     else: density_assessment = "Sehr dichte Lines (Bebop/Coltrane-Stil)"
     
-    artists = []
     if tempo < 100 and note_density < 2: artists = ["Bill Evans", "Keith Jarrett"]
     elif 140 <= tempo < 200 and note_density > 3: artists = ["Charlie Parker", "Dizzy Gillespie"]
     elif note_density > 4: artists = ["John Coltrane", "Michael Brecker"]
@@ -470,7 +583,7 @@ def analyze_jazz_patterns(audio_features: Dict) -> Dict:
 # APERTUS AI FEEDBACK
 # ============================================================================
 
-async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_analysis: Dict) -> Dict:
+async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_analysis: Dict, user_key: str) -> Dict:
     if not apertus_client: return None
     
     try:
@@ -495,9 +608,9 @@ MIDI ANALYSE (100% akkurat):
 - Erkannte Noten: {note_analysis['total_notes']}
 - Tonumfang: {note_analysis['pitch_range']['min_note']} bis {note_analysis['pitch_range']['max_note']}
 - Häufigste Noten: {', '.join(note_analysis['most_common_notes'][:5])}
-- Erkannte Tonart: {note_analysis.get('detected_scale', 'unbekannt')}{chord_info}"""
+- Vom User angegebene Tonart: {user_key}{chord_info}"""
         
-        prompt = f"""Du bist ein erfahrener Jazz-Lehrer. Analysiere diese Jazz-Improvisation:
+        prompt = f"""Du bist ein erfahrener Jazz-Lehrer. Analysiere diese Jazz-Improvisation in {user_key}:
 
 MIDI-DATEN:
 - Dauer: {audio_features.get('duration', 0):.1f}s, Tempo: {audio_features.get('tempo', 120):.1f} BPM
@@ -509,7 +622,7 @@ JAZZ-KONTEXT: {jazz_analysis['tempo_category']}, {jazz_analysis['rhythm_assessme
 Gib Feedback in 4 Kategorien (je 1-10):
 1. Rhythmus & Timing 2. Harmonie 3. Melodie & Phrasierung 4. Artikulation & Dynamik
 
-Antworte NUR mit JSON (keine Backticks):
+Antworte NUR mit JSON:
 {{"rhythm": {{"score": 7.5, "feedback": "...", "tips": ["...", "...", "..."]}}, "harmony": {{"score": 8.0, "feedback": "...", "tips": ["...", "...", "..."]}}, "melody": {{"score": 6.5, "feedback": "...", "tips": ["...", "...", "..."]}}, "articulation": {{"score": 7.0, "feedback": "...", "tips": ["...", "...", "..."]}}}}"""
         
         response = apertus_client.chat_completion(model="swiss-ai/Apertus-70B-Instruct-2509", messages=[{"role": "user", "content": prompt}], max_tokens=1500, temperature=0.7)
@@ -531,20 +644,30 @@ def generate_rule_based_feedback(audio_features: Dict, jazz_analysis: Dict) -> D
         "rhythm": {"score": round(min(10, max(1, (tempo_stability * 5) + (5 if 3 <= rhythm_complexity <= 6 else 3))), 1), "feedback": f"Timing-Stabilität bei {tempo_stability:.0%}. {jazz_analysis['rhythm_assessment']}.", "tips": [f"Übe mit Metronom bei {audio_features.get('tempo', 120):.0f} BPM", f"Höre {jazz_analysis['similar_artists'][0]}", f"Arbeite am {jazz_analysis['swing_feel']}"]},
         "harmony": {"score": 7.0, "feedback": "Harmonische Struktur erkannt.", "tips": ["Achte auf Guide Tones (3 und 7)", "Nutze chromatische Approach-Töne", "Studiere Bebop-Scales"]},
         "melody": {"score": 6.5 if 2 <= note_density <= 4 else 5.5, "feedback": f"{jazz_analysis['density_assessment']}.", "tips": ["Variiere Phrasenlängen", "Nutze mehr Pausen", f"Studiere {', '.join(jazz_analysis['similar_artists'][:2])}"]},
-        "articulation": {"score": round(min(10, max(1, dynamic_range * 2 + 5)), 1), "feedback": f"Dynamik-Variation vorhanden. {jazz_analysis['density_assessment']}.", "tips": ["Arbeite an dynamischen Kontrasten", "Nutze Akzente", "Experimentiere mit Anschlagstärken"]}
+        "articulation": {"score": round(min(10, max(1, dynamic_range * 2 + 5)), 1), "feedback": f"Dynamik-Variation vorhanden.", "tips": ["Arbeite an dynamischen Kontrasten", "Nutze Akzente", "Experimentiere mit Anschlagstärken"]}
     }
 
 # ============================================================================
 # BACKGROUND PROCESSING
 # ============================================================================
 
-def process_midi_in_background(analysis_id: str, tmp_path: str):
+def process_midi_in_background(analysis_id: str, tmp_path: str, user_key: str):
     import asyncio, gc
     try:
         analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
+        
+        # Pass user_key to analyzer
         note_analysis = analyze_midi_file(tmp_path)
+        
+        # Override detected key with user key
+        note_analysis['detected_scale'] = user_key
+        
         if note_analysis.get('error') or note_analysis.get('total_notes', 0) == 0:
             raise Exception(f"MIDI failed: {note_analysis.get('error', 'No notes')}")
+        
+        # Recalculate progression with user key
+        from midi_analyzer import detect_progression
+        note_analysis['progression'] = detect_progression(note_analysis.get('chords', []), user_key)
         
         duration = max(1, note_analysis.get('duration', 1))
         audio_features = {
@@ -562,7 +685,7 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
         analysis_results[analysis_id] = {"status": "processing", "stage": "ai"}
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        feedback = loop.run_until_complete(get_apertus_feedback(audio_features, jazz_analysis, note_analysis))
+        feedback = loop.run_until_complete(get_apertus_feedback(audio_features, jazz_analysis, note_analysis, user_key))
         loop.close()
         
         if not feedback: feedback = generate_rule_based_feedback(audio_features, jazz_analysis)
@@ -572,7 +695,8 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
         analysis_results[analysis_id] = {"status": "completed", "result": {
             "overall_score": round(overall_score, 1), "audio_features": audio_features,
             "jazz_analysis": jazz_analysis, "note_analysis": note_analysis,
-            "feedback": feedback, "ai_generated": apertus_client is not None
+            "feedback": feedback, "ai_generated": apertus_client is not None,
+            "user_key": user_key
         }}
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -585,15 +709,18 @@ def process_midi_in_background(analysis_id: str, tmp_path: str):
 # ============================================================================
 
 @app.post("/analyze-async")
-async def analyze_midi_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def analyze_midi_async(background_tasks: BackgroundTasks, file: UploadFile = File(...), key: str = Form("C Major")):
     if not (file.filename.endswith('.mid') or file.filename.endswith('.midi')):
         raise HTTPException(status_code=400, detail="Nur MIDI-Dateien erlaubt")
+    
     analysis_id = str(uuid.uuid4())
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mid') as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
-    background_tasks.add_task(process_midi_in_background, analysis_id, tmp_path)
-    return {"analysis_id": analysis_id, "status": "processing"}
+    
+    # Pass user-selected key to background task
+    background_tasks.add_task(process_midi_in_background, analysis_id, tmp_path, key)
+    return {"analysis_id": analysis_id, "status": "processing", "key": key}
 
 @app.get("/result/{analysis_id}")
 async def get_result(analysis_id: str):
@@ -602,7 +729,7 @@ async def get_result(analysis_id: str):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "ai_enabled": apertus_client is not None, "analysis_type": "MIDI Grand Staff"}
+    return {"status": "healthy", "ai_enabled": apertus_client is not None}
 
 if __name__ == "__main__":
     import uvicorn
