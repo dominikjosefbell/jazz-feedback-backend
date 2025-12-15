@@ -13,7 +13,7 @@ from knowledge_loader import get_knowledge_base
 from midi_analyzer import analyze_midi_file, analyze_voice_leading
 import uuid
 from datetime import datetime
-from huggingface_hub import InferenceClient
+import requests
 
 app = FastAPI(title="Jazz Feedback API - MIDI")
 
@@ -25,21 +25,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-apertus_client = None
+# Apertus AI Configuration - NEW Router API
+HF_TOKEN = os.environ.get("HF_TOKEN")
+APERTUS_URL = "https://router.huggingface.co/v1/chat/completions"
+APERTUS_MODEL = "swiss-ai/Apertus-8B-Instruct-2509:publicai"
 
-def initialize_apertus():
-    global apertus_client
-    try:
-        hf_token = os.environ.get("HF_TOKEN")
-        if hf_token:
-            apertus_client = InferenceClient(token=hf_token)
-            print("✅ Apertus API connected!")
-        else:
-            print("⚠️  HF_TOKEN not found - AI disabled")
-    except Exception as e:
-        print(f"⚠️  Apertus init failed: {e}")
+def check_apertus():
+    if HF_TOKEN:
+        print(f"✅ Apertus AI configured (Token: {HF_TOKEN[:10]}...)")
+        return True
+    else:
+        print("⚠️  HF_TOKEN not found - AI disabled")
+        return False
 
-initialize_apertus()
+apertus_enabled = check_apertus()
 
 analysis_results = {}
 
@@ -537,7 +536,7 @@ async def root():
 
 @app.get("/ai-status")
 async def ai_status():
-    return {"ai_enabled": apertus_client is not None}
+    return {"ai_enabled": apertus_enabled}
 
 # ============================================================================
 # JAZZ PATTERN ANALYSIS
@@ -570,7 +569,8 @@ def analyze_jazz_patterns(audio_features: Dict) -> Dict:
 # ============================================================================
 
 async def get_apertus_feedback(audio_features: Dict, jazz_analysis: Dict, note_analysis: Dict, user_key: str) -> Dict:
-    if not apertus_client: return None
+    if not apertus_enabled or not HF_TOKEN:
+        return None
     
     try:
         try:
@@ -602,12 +602,35 @@ Gib Feedback (1-10) für: Rhythmus, Harmonie, Melodie, Artikulation.
 Antworte NUR als JSON:
 {{"rhythm": {{"score": 7.5, "feedback": "...", "tips": ["...", "...", "..."]}}, "harmony": {{"score": 8.0, "feedback": "...", "tips": ["...", "...", "..."]}}, "melody": {{"score": 6.5, "feedback": "...", "tips": ["...", "...", "..."]}}, "articulation": {{"score": 7.0, "feedback": "...", "tips": ["...", "...", "..."]}}}}"""
         
-        response = apertus_client.chat_completion(model="swiss-ai/Apertus-70B-Instruct-2509", messages=[{"role": "user", "content": prompt}], max_tokens=1200, temperature=0.7)
-        text = response.choices[0].message.content.replace('```json', '').replace('```', '').strip()
+        # NEW: Use Router API with requests
+        response = requests.post(
+            APERTUS_URL,
+            headers={
+                "Authorization": f"Bearer {HF_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": APERTUS_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 1200,
+                "temperature": 0.7
+            },
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            print(f"Apertus API Error: {response.status_code} - {response.text}")
+            return None
+        
+        result = response.json()
+        text = result['choices'][0]['message']['content']
+        text = text.replace('```json', '').replace('```', '').strip()
         if "{" in text: text = text[text.find("{"):text.rfind("}")+1]
         return json.loads(text)
     except Exception as e:
         print(f"Apertus Error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def generate_rule_based_feedback(audio_features: Dict, jazz_analysis: Dict) -> Dict:
@@ -665,7 +688,7 @@ def process_midi_in_background(analysis_id: str, tmp_path: str, user_key: str):
             "jazz_analysis": jazz_analysis,
             "note_analysis": note_analysis,
             "feedback": feedback,
-            "ai_generated": apertus_client is not None,
+            "ai_generated": apertus_enabled,
             "user_key": user_key
         }}
     except Exception as e:
@@ -698,7 +721,7 @@ async def get_result(analysis_id: str):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "ai_enabled": apertus_client is not None}
+    return {"status": "healthy", "ai_enabled": apertus_enabled}
 
 if __name__ == "__main__":
     import uvicorn
