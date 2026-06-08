@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Env / secrets
+.env
+.env.*
+
+# Test-/Build-Artefakte
+*.mid
+!knowledge/**/*.mid
+*.log
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db

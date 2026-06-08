@@ -9,11 +9,23 @@ import tempfile
 import os
 from typing import Dict, List, Optional
 import json
-from knowledge_loader import get_knowledge_base
+# RAG-Wissensbasis ist optional (schwere Abhaengigkeit: chromadb). Faellt sie
+# aus, laeuft die App trotzdem — nur der alte RAG-Kontext entfaellt.
+try:
+    from knowledge_loader import get_knowledge_base
+except Exception as _kb_err:
+    print(f"⚠️  knowledge_loader nicht verfuegbar ({_kb_err}) — RAG deaktiviert")
+    def get_knowledge_base():
+        raise RuntimeError("knowledge base unavailable")
 from midi_analyzer import analyze_midi_file, analyze_voice_leading
 import uuid
 from datetime import datetime
 import requests
+
+# Neue Engine (jazzfb) + Standards-Bibliothek + Orchestrierung.
+# Loest die alte blinde Harmonie-Erkennung ab: Changes sind bekannt/vorgegeben.
+import jazz_service
+import standards
 
 app = FastAPI(title="Jazz Feedback API - MIDI")
 
@@ -46,489 +58,7 @@ analysis_results = {}
 # WEB UI WITH KEY SELECTOR + RHYTHM
 # ============================================================================
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jazz Feedback - MIDI Analyse</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.2.2/dist/abcjs-basic-min.js"></script>
-    <style>
-        .abcjs-container svg { max-width: 100%; height: auto; }
-        #pianoSheet svg { background: white; border-radius: 8px; }
-    </style>
-</head>
-<body class="bg-gradient-to-br from-red-50 via-white to-white min-h-screen">
-    <div class="max-w-4xl mx-auto p-6">
-        <div class="text-center mb-8 pt-8">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                </svg>
-            </div>
-            <h1 class="text-4xl font-bold text-gray-900 mb-2">Jazz-Improvisation Feedback</h1>
-            <p class="text-gray-600">🇨🇭 Apertus AI + 🎹 MIDI Analyse + 🎼 Notenschrift</p>
-        </div>
-
-        <div id="aiStatus" class="mb-6"></div>
-
-        <div class="bg-white rounded-2xl shadow-lg p-8 mb-6">
-            <input type="file" id="fileInput" accept=".mid,.midi" class="hidden">
-            
-            <div id="dropzone" class="border-3 border-dashed border-red-300 rounded-xl p-12 text-center cursor-pointer hover:border-red-500 hover:bg-red-50 transition-all mb-6">
-                <svg class="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                </svg>
-                <p class="text-lg font-semibold text-gray-700 mb-2" id="fileName">MIDI-Datei hochladen</p>
-                <p class="text-sm text-gray-500">MIDI-Dateien (.mid, .midi)</p>
-            </div>
-
-            <div id="keySelector" class="hidden mb-6">
-                <label class="block text-sm font-semibold text-gray-700 mb-2">🎼 Tonart:</label>
-                <select id="keySelect" class="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all text-lg">
-                    <optgroup label="Dur">
-                        <option value="C Major">C-Dur</option>
-                        <option value="G Major">G-Dur</option>
-                        <option value="D Major">D-Dur</option>
-                        <option value="A Major">A-Dur</option>
-                        <option value="E Major">E-Dur</option>
-                        <option value="B Major">H-Dur</option>
-                        <option value="F# Major">Fis-Dur</option>
-                        <option value="F Major">F-Dur</option>
-                        <option value="Bb Major">B-Dur</option>
-                        <option value="Eb Major">Es-Dur</option>
-                        <option value="Ab Major">As-Dur</option>
-                        <option value="Db Major">Des-Dur</option>
-                    </optgroup>
-                    <optgroup label="Moll">
-                        <option value="A Minor">a-Moll</option>
-                        <option value="E Minor">e-Moll</option>
-                        <option value="B Minor">h-Moll</option>
-                        <option value="F# Minor">fis-Moll</option>
-                        <option value="D Minor">d-Moll</option>
-                        <option value="G Minor">g-Moll</option>
-                        <option value="C Minor">c-Moll</option>
-                        <option value="F Minor">f-Moll</option>
-                    </optgroup>
-                </select>
-            </div>
-
-            <button id="analyzeBtn" class="w-full bg-red-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors hidden">
-                🎵 MIDI Analyse starten
-            </button>
-        </div>
-
-        <div id="loading" class="bg-white rounded-2xl shadow-lg p-6 mb-6 hidden">
-            <div class="flex items-center gap-3 mb-3">
-                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
-                <span class="text-gray-700 font-medium" id="loadingText">Analysiere...</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-2">
-                <div id="progressBar" class="bg-red-600 h-2 rounded-full transition-all" style="width: 0%"></div>
-            </div>
-        </div>
-
-        <div id="results" class="space-y-6"></div>
-    </div>
-
-    <script>
-        let selectedFile = null;
-        let analysisId = null;
-
-        fetch('/ai-status').then(r => r.json()).then(data => {
-            const statusDiv = document.getElementById('aiStatus');
-            if (data.ai_enabled) {
-                statusDiv.innerHTML = '<div class="bg-gradient-to-r from-red-50 to-white border border-red-200 rounded-xl p-4"><div class="text-sm font-medium text-red-900">🇨🇭 Apertus AI + 🎹 MIDI + 🎼 Notenschrift aktiv</div></div>';
-            } else {
-                statusDiv.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4"><span class="text-sm font-medium text-yellow-900">⚠️ AI deaktiviert</span></div>';
-            }
-        });
-
-        document.getElementById('dropzone').addEventListener('click', () => document.getElementById('fileInput').click());
-
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file && (file.name.endsWith('.mid') || file.name.endsWith('.midi'))) {
-                selectedFile = file;
-                document.getElementById('fileName').textContent = '✓ ' + file.name;
-                document.getElementById('dropzone').classList.add('border-green-400', 'bg-green-50');
-                document.getElementById('dropzone').classList.remove('border-red-300');
-                document.getElementById('keySelector').classList.remove('hidden');
-                document.getElementById('analyzeBtn').classList.remove('hidden');
-            } else {
-                alert('Bitte eine MIDI-Datei (.mid oder .midi) auswählen');
-            }
-        });
-
-        document.getElementById('analyzeBtn').addEventListener('click', async () => {
-            if (!selectedFile) return;
-            
-            const selectedKey = document.getElementById('keySelect').value;
-            
-            document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('results').innerHTML = '';
-            document.getElementById('loadingText').textContent = 'Uploading...';
-            document.getElementById('progressBar').style.width = '10%';
-
-            const formData = new FormData();
-            formData.append('file', selectedFile);
-            formData.append('key', selectedKey);
-
-            try {
-                const response = await fetch('/analyze-async', { method: 'POST', body: formData });
-                const data = await response.json();
-                analysisId = data.analysis_id;
-                document.getElementById('loadingText').textContent = 'Analysiere MIDI...';
-                document.getElementById('progressBar').style.width = '20%';
-                pollForResults(analysisId);
-            } catch (error) {
-                alert('Fehler: ' + error.message);
-                document.getElementById('loading').classList.add('hidden');
-            }
-        });
-
-        async function pollForResults(id) {
-            const maxAttempts = 60;
-            let attempts = 0;
-            const interval = setInterval(async () => {
-                attempts++;
-                try {
-                    const response = await fetch('/result/' + id);
-                    const data = await response.json();
-                    if (data.status === 'completed') {
-                        clearInterval(interval);
-                        document.getElementById('progressBar').style.width = '100%';
-                        setTimeout(() => {
-                            document.getElementById('loading').classList.add('hidden');
-                            displayResults(data.result);
-                        }, 500);
-                    } else if (data.status === 'processing') {
-                        const progress = 20 + (attempts / maxAttempts) * 70;
-                        document.getElementById('progressBar').style.width = progress + '%';
-                        if (data.stage === 'notes') document.getElementById('loadingText').textContent = '🎹 MIDI Analyse...';
-                        else if (data.stage === 'ai') document.getElementById('loadingText').textContent = '🇨🇭 Apertus AI Feedback...';
-                    } else if (data.status === 'error') {
-                        clearInterval(interval);
-                        alert('Fehler: ' + data.error);
-                        document.getElementById('loading').classList.add('hidden');
-                    }
-                    if (attempts >= maxAttempts) {
-                        clearInterval(interval);
-                        alert('Timeout');
-                        document.getElementById('loading').classList.add('hidden');
-                    }
-                } catch (error) { console.error('Poll error:', error); }
-            }, 3000);
-        }
-
-        // ABC Key mapping
-        function getAbcKey(userKey) {
-            const map = {
-                'C Major': 'C', 'G Major': 'G', 'D Major': 'D', 'A Major': 'A', 
-                'E Major': 'E', 'B Major': 'B', 'F# Major': 'F#', 'F Major': 'F',
-                'Bb Major': 'Bb', 'Eb Major': 'Eb', 'Ab Major': 'Ab', 'Db Major': 'Db',
-                'A Minor': 'Am', 'E Minor': 'Em', 'B Minor': 'Bm', 'F# Minor': 'F#m',
-                'D Minor': 'Dm', 'G Minor': 'Gm', 'C Minor': 'Cm', 'F Minor': 'Fm'
-            };
-            return map[userKey] || 'C';
-        }
-
-        // MIDI to ABC - treble clef (notes >= 60)
-        function midiToAbcTreble(pitch) {
-            const notes = ['C', '^C', 'D', '^D', 'E', 'F', '^F', 'G', '^G', 'A', '^A', 'B'];
-            const oct = Math.floor(pitch / 12) - 1;
-            const n = notes[pitch % 12];
-            if (oct === 5) return n.toLowerCase();
-            if (oct === 6) return n.toLowerCase() + "'";
-            if (oct === 7) return n.toLowerCase() + "''";
-            if (oct === 4) return n;
-            if (oct === 3) return n + ",";
-            return n;
-        }
-
-        // MIDI to ABC - bass clef (notes < 60) - FIXED OCTAVE
-        function midiToAbcBass(pitch) {
-            const notes = ['C', '^C', 'D', '^D', 'E', 'F', '^F', 'G', '^G', 'A', '^A', 'B'];
-            const oct = Math.floor(pitch / 12) - 1;
-            const n = notes[pitch % 12];
-            // Bass clef: C3 = C,  C2 = C,,  C4 = C (middle)
-            if (oct === 2) return n + ",";
-            if (oct === 1) return n + ",,";
-            if (oct === 3) return n;
-            if (oct === 4) return n.toLowerCase();
-            return n + ",";
-        }
-
-        // Convert duration in seconds to ABC note length
-        function durationToAbc(durationSec, tempo) {
-            // Base unit is 1/8 note
-            const beatSec = 60 / tempo;  // seconds per quarter note
-            const eighthSec = beatSec / 2;  // seconds per eighth note
-            
-            // How many eighth notes does this duration span?
-            const eighths = Math.round(durationSec / eighthSec);
-            
-            // ABC length notation (L:1/8 base)
-            // 1 = eighth, 2 = quarter, 4 = half, 8 = whole
-            if (eighths <= 0) return "";
-            if (eighths === 1) return "";      // 1/8
-            if (eighths === 2) return "2";     // 1/4
-            if (eighths === 3) return "3";     // dotted 1/4
-            if (eighths === 4) return "4";     // 1/2
-            if (eighths === 6) return "6";     // dotted 1/2
-            if (eighths >= 8) return "8";      // whole
-            return String(eighths);
-        }
-
-        // Merge consecutive identical chords
-        function mergeChords(chords) {
-            if (!chords || chords.length === 0) return [];
-            
-            const merged = [];
-            let current = { ...chords[0], duration: 0 };
-            
-            for (let i = 0; i < chords.length; i++) {
-                const chord = chords[i];
-                const nextChord = chords[i + 1];
-                
-                // Calculate duration to next chord (or end)
-                let duration;
-                if (nextChord) {
-                    duration = nextChord.start_time - chord.start_time;
-                } else {
-                    duration = 1.0; // Default last chord duration
-                }
-                
-                // Is this the same chord as current?
-                if (merged.length > 0 && chord.symbol === merged[merged.length - 1].symbol) {
-                    // Extend the duration
-                    merged[merged.length - 1].duration += duration;
-                } else {
-                    // New chord
-                    merged.push({
-                        ...chord,
-                        duration: duration
-                    });
-                }
-            }
-            
-            return merged;
-        }
-
-        // Generate ABC with rhythm from chord durations
-        function generateAbcWithRhythm(chords, userKey, tempo) {
-            if (!chords || chords.length === 0) return null;
-            
-            // Merge consecutive same chords
-            const mergedChords = mergeChords(chords);
-            
-            const abcKey = getAbcKey(userKey);
-            const bpm = Math.round(tempo) || 120;
-            
-            let abc = "X:1\\n";
-            abc += "T:Erkannte Akkorde\\n";
-            abc += "M:4/4\\n";
-            abc += "L:1/8\\n";  // Base unit: eighth note
-            abc += "Q:1/4=" + bpm + "\\n";
-            abc += "K:" + abcKey + "\\n";
-            abc += "%%staves {1 2}\\n";
-            abc += "V:1 clef=treble\\n";
-            abc += "V:2 clef=bass\\n";
-            
-            // Treble staff
-            abc += "[V:1] ";
-            let beatCount = 0;
-            mergedChords.forEach((chord, idx) => {
-                // Add chord symbol
-                abc += '"' + chord.symbol + '"';
-                
-                // Get note length
-                const len = durationToAbc(chord.duration, bpm);
-                
-                // Treble notes (>= 60)
-                const trebleNotes = chord.pitches.filter(p => p >= 60).sort((a,b) => a-b);
-                
-                if (trebleNotes.length === 0) {
-                    abc += "z" + len;
-                } else if (trebleNotes.length === 1) {
-                    abc += midiToAbcTreble(trebleNotes[0]) + len;
-                } else {
-                    abc += "[";
-                    trebleNotes.forEach(p => abc += midiToAbcTreble(p));
-                    abc += "]" + len;
-                }
-                
-                // Calculate beats for bar lines
-                const eighths = Math.max(1, Math.round(chord.duration / (60 / bpm / 2)));
-                beatCount += eighths;
-                
-                // Add bar line every 8 eighths (= 4 beats = 1 bar)
-                if (beatCount >= 8) {
-                    abc += " |";
-                    beatCount = beatCount % 8;
-                }
-                abc += " ";
-            });
-            abc += "|\\n";
-            
-            // Bass staff
-            abc += "[V:2] ";
-            beatCount = 0;
-            mergedChords.forEach((chord, idx) => {
-                const len = durationToAbc(chord.duration, bpm);
-                
-                // Bass notes (< 60)
-                const bassNotes = chord.pitches.filter(p => p < 60).sort((a,b) => a-b);
-                
-                if (bassNotes.length === 0) {
-                    abc += "z" + len;
-                } else if (bassNotes.length === 1) {
-                    abc += midiToAbcBass(bassNotes[0]) + len;
-                } else {
-                    abc += "[";
-                    bassNotes.forEach(p => abc += midiToAbcBass(p));
-                    abc += "]" + len;
-                }
-                
-                const eighths = Math.max(1, Math.round(chord.duration / (60 / bpm / 2)));
-                beatCount += eighths;
-                
-                if (beatCount >= 8) {
-                    abc += " |";
-                    beatCount = beatCount % 8;
-                }
-                abc += " ";
-            });
-            abc += "|";
-            
-            return abc;
-        }
-
-        function displayResults(data) {
-            const getScoreColor = (score) => score >= 8 ? 'green' : score >= 6 ? 'yellow' : 'orange';
-            let html = '';
-            
-            const userKey = data.user_key || 'C Major';
-
-            if (data.ai_generated) {
-                html += '<div class="bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl p-4 mb-6"><span class="font-semibold">🇨🇭 Feedback von Apertus AI</span></div>';
-            }
-
-            // SHEET MUSIC with rhythm
-            if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
-                html += '<div class="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4 shadow-lg">';
-                html += '<h3 class="font-bold text-xl text-gray-900 mb-2">🎼 Notenschrift</h3>';
-                html += '<p class="text-sm text-gray-500 mb-4">Tonart: <strong>' + userKey + '</strong></p>';
-                html += '<div id="pianoSheet" class="bg-gray-50 rounded-xl p-4 overflow-x-auto min-h-[180px]"></div>';
-                html += '</div>';
-            }
-
-            // CHORD DETECTION - Visual boxes
-            if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
-                // Merge for display too
-                const uniqueChords = [];
-                let lastSymbol = '';
-                data.note_analysis.chords.forEach(chord => {
-                    if (chord.symbol !== lastSymbol) {
-                        uniqueChords.push(chord);
-                        lastSymbol = chord.symbol;
-                    }
-                });
-                
-                html += '<div class="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-6 mb-4">';
-                html += '<h3 class="font-semibold text-blue-900 mb-4">🎹 Erkannte Akkorde</h3>';
-                html += '<div class="flex flex-wrap gap-3 mb-4 items-center">';
-                uniqueChords.forEach((chord, index) => {
-                    const isMinor = chord.type && chord.type.includes('m') && !chord.type.includes('maj');
-                    const bgColor = isMinor ? 'bg-indigo-100 border-indigo-300' : 'bg-blue-100 border-blue-300';
-                    html += '<div class="' + bgColor + ' border-2 rounded-xl px-4 py-3 text-center shadow-sm">';
-                    html += '<div class="font-bold text-xl text-gray-800">' + chord.symbol + '</div>';
-                    html += '<div class="text-sm text-gray-600 mt-1">' + chord.notes.join(' · ') + '</div>';
-                    html += '</div>';
-                    if (index < uniqueChords.length - 1) html += '<div class="text-gray-400 text-2xl">→</div>';
-                });
-                html += '</div>';
-                
-                if (data.note_analysis.progression) {
-                    html += '<div class="bg-white/60 rounded-lg p-4 mt-3">';
-                    if (data.note_analysis.progression.type && data.note_analysis.progression.type !== 'Custom') {
-                        html += '<p class="text-green-700 font-semibold">✓ ' + data.note_analysis.progression.type + '</p>';
-                    }
-                    if (data.note_analysis.progression.roman_numerals && data.note_analysis.progression.roman_numerals.length > 0) {
-                        // Also deduplicate roman numerals
-                        const uniqueRoman = [];
-                        let lastRoman = '';
-                        data.note_analysis.progression.roman_numerals.forEach(r => {
-                            if (r !== lastRoman) { uniqueRoman.push(r); lastRoman = r; }
-                        });
-                        html += '<p class="text-sm text-blue-600 mt-1">' + uniqueRoman.join(' → ') + '</p>';
-                    }
-                    html += '</div>';
-                }
-                html += '</div>';
-            }
-
-            // ANALYSE INFO
-            if (data.note_analysis && data.note_analysis.total_notes > 0) {
-                html += '<div class="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6 mb-4">';
-                html += '<h3 class="font-semibold text-purple-900 mb-4">📊 Analyse</h3>';
-                html += '<div class="grid grid-cols-2 gap-4 text-sm">';
-                html += '<div><strong>Noten:</strong> ' + data.note_analysis.total_notes + '</div>';
-                html += '<div><strong>Tonumfang:</strong> ' + data.note_analysis.pitch_range.min_note + ' - ' + data.note_analysis.pitch_range.max_note + '</div>';
-                html += '<div><strong>Tempo:</strong> ' + data.audio_features.tempo.toFixed(0) + ' BPM</div>';
-                html += '<div><strong>Dauer:</strong> ' + data.audio_features.duration.toFixed(1) + 's</div>';
-                html += '</div></div>';
-            }
-
-            // JAZZ CONTEXT
-            html += '<div class="bg-gradient-to-br from-red-50 to-pink-50 border border-red-200 rounded-xl p-6 mb-4"><h3 class="font-semibold text-red-900 mb-4">🎷 Jazz-Kontext</h3><div class="space-y-2 text-sm"><p><strong>Tempo:</strong> ' + data.jazz_analysis.tempo_category + '</p><p class="text-red-700">' + data.jazz_analysis.tempo_reference + '</p><p><strong>Ähnlich:</strong> ' + data.jazz_analysis.similar_artists.join(', ') + '</p></div></div>';
-
-            // GESAMTBEWERTUNG
-            const color = getScoreColor(data.overall_score);
-            html += '<div class="bg-white rounded-2xl shadow-lg p-8 text-center mb-4"><h2 class="text-2xl font-bold mb-4">Gesamtbewertung</h2><div class="text-6xl font-bold text-' + color + '-600 mb-2">' + data.overall_score + '<span class="text-3xl text-gray-400">/10</span></div></div>';
-
-            // FEEDBACK CATEGORIES
-            const categories = [
-                { title: 'Rhythmus & Timing', data: data.feedback.rhythm },
-                { title: 'Harmonie', data: data.feedback.harmony },
-                { title: 'Melodie & Phrasierung', data: data.feedback.melody },
-                { title: 'Artikulation & Dynamik', data: data.feedback.articulation }
-            ];
-            categories.forEach(cat => {
-                const catColor = getScoreColor(cat.data.score);
-                html += '<div class="bg-white rounded-2xl shadow-lg p-6 mb-4"><div class="flex items-center justify-between mb-2"><h3 class="text-xl font-bold">' + cat.title + '</h3><span class="text-2xl font-bold text-' + catColor + '-600">' + cat.data.score.toFixed(1) + '</span></div><p class="text-gray-700 mb-3">' + cat.data.feedback + '</p><div class="bg-gray-50 rounded-lg p-4"><p class="font-semibold mb-2">Tipps:</p><ul class="space-y-1">' + cat.data.tips.map(tip => '<li class="text-sm text-gray-600">• ' + tip + '</li>').join('') + '</ul></div></div>';
-            });
-
-            document.getElementById('results').innerHTML = html;
-
-            // Render sheet music with RHYTHM
-            setTimeout(() => {
-                if (data.note_analysis && data.note_analysis.chords && data.note_analysis.chords.length > 0) {
-                    const tempo = data.audio_features.tempo || 120;
-                    const abcNotation = generateAbcWithRhythm(data.note_analysis.chords, userKey, tempo);
-                    
-                    if (abcNotation && typeof ABCJS !== 'undefined') {
-                        console.log('ABC:', abcNotation.replace(/\\\\n/g, '\\n'));
-                        try {
-                            ABCJS.renderAbc('pianoSheet', abcNotation.replace(/\\\\n/g, '\\n'), {
-                                responsive: 'resize',
-                                staffwidth: 700,
-                                paddingtop: 10,
-                                paddingbottom: 10
-                            });
-                        } catch (e) {
-                            console.error('ABCJS Error:', e);
-                        }
-                    }
-                }
-            }, 200);
-        }
-    </script>
-</body>
-</html>
-"""
+from ui_template import HTML_TEMPLATE  # eingebettete Web-UI (ausgelagert)
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -698,8 +228,155 @@ def process_midi_in_background(analysis_id: str, tmp_path: str, user_key: str):
         if os.path.exists(tmp_path): os.unlink(tmp_path)
 
 # ============================================================================
+# NEUE ENGINE: jazzfb gegen BEKANNTE Changes (Slice 1)
+# ============================================================================
+
+async def get_apertus_feedback_grounded(facts: str, tune_name: str) -> Optional[Dict]:
+    """Apertus-Feedback, das auf den regelbasierten jazzfb-Fakten fusst.
+    Behaelt das bestehende Score-JSON-Format (rhythm/harmony/melody/
+    articulation), damit die UI unveraendert rendert — aber die Bewertung
+    stuetzt sich auf echte Analyse gegen bekannte Changes, nicht auf geratene
+    Harmonie."""
+    if not apertus_enabled or not HF_TOKEN:
+        return None
+    try:
+        prompt = f"""Du bist ein erfahrener Jazz-Pianist und Klavier-Lehrer. Unten steht eine
+AUTOMATISCH ERZEUGTE, REGELBASIERTE Analyse eines Solo-Klavier-Chorus ueber die
+BEKANNTEN Changes von "{tune_name}". Die Zahlen stammen aus Musiktheorie-Regeln
+gegen die vorgegebenen Changes (nicht aus geratener Harmonie) und aus einer
+moeglicherweise fehlerbehafteten Transkription — bewerte deshalb TENDENZEN und
+STATISTIK, nicht einzelne Noten.
+
+ANALYSE-FAKTEN:
+{facts}
+
+Gib didaktisches, ermutigendes, musikalisch fundiertes Feedback. Bewerte (1.0-10.0)
+und begruende kurz fuer: Rhythmus/Time-Feel, Harmonie (Akkordtoene/Tensions/Avoid
+auf den Changes), Melodie/Linienfuehrung, Artikulation/Dynamik. Jede Kategorie mit
+3 konkreten Uebe-Tipps.
+Antworte NUR als JSON:
+{{"rhythm": {{"score": 7.5, "feedback": "...", "tips": ["...","...","..."]}}, "harmony": {{"score": 8.0, "feedback": "...", "tips": ["...","...","..."]}}, "melody": {{"score": 6.5, "feedback": "...", "tips": ["...","...","..."]}}, "articulation": {{"score": 7.0, "feedback": "...", "tips": ["...","...","..."]}}}}"""
+
+        response = requests.post(
+            APERTUS_URL,
+            headers={"Authorization": f"Bearer {HF_TOKEN}", "Content-Type": "application/json"},
+            json={"model": APERTUS_MODEL,
+                  "messages": [{"role": "user", "content": prompt}],
+                  "max_tokens": 1400, "temperature": 0.7},
+            timeout=90,
+        )
+        if response.status_code != 200:
+            print(f"Apertus API Error: {response.status_code} - {response.text}")
+            return None
+        text = response.json()['choices'][0]['message']['content']
+        text = text.replace('```json', '').replace('```', '').strip()
+        if "{" in text:
+            text = text[text.find("{"):text.rfind("}") + 1]
+        return json.loads(text)
+    except Exception as e:
+        print(f"Apertus (grounded) Error: {e}")
+        import traceback; traceback.print_exc()
+        return None
+
+
+def _resolve_changes(tune: Optional[str], manual_changes: Optional[str]):
+    """Liefert (bars, beats_per_bar, tempo_hint, tune_name) aus Standard-Auswahl
+    oder Freitext-Changes. Freitext hat Vorrang, wenn gesetzt."""
+    if manual_changes and manual_changes.strip():
+        bars = standards.parse_manual_changes(manual_changes)
+        return bars, 4, None, "Eigene Changes"
+    std = standards.get_standard(tune) if tune else None
+    if std:
+        return std["bars"], std.get("beats_per_bar", 4), std.get("tempo_hint"), tune
+    return None, 4, None, None
+
+
+def process_jazz_in_background(analysis_id: str, tmp_path: str, tune: Optional[str],
+                               manual_changes: Optional[str], beats_per_bar: int,
+                               bpm: Optional[float]):
+    import asyncio, gc
+    try:
+        analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
+        bars, bpb, tempo_hint, tune_name = _resolve_changes(tune, manual_changes)
+        if not bars:
+            raise Exception("Keine Changes: Standard waehlen oder eigene Changes eingeben.")
+        if beats_per_bar:
+            bpb = int(beats_per_bar)
+
+        res = jazz_service.analyze_midi_with_changes(
+            tmp_path, bars, beats_per_bar=bpb,
+            bpm=(float(bpm) if bpm else None))
+        if not res.get("ok"):
+            raise Exception(res.get("error", "Analyse fehlgeschlagen."))
+
+        report, summary, used = res["report"], res["summary"], res["used"]
+        facts = jazz_service.facts_for_llm(report, summary, tune_name or "Eigene Changes")
+        gc.collect()
+
+        analysis_results[analysis_id] = {"status": "processing", "stage": "ai"}
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        feedback = loop.run_until_complete(
+            get_apertus_feedback_grounded(facts, tune_name or "Eigene Changes"))
+        loop.close()
+
+        ai_generated = feedback is not None
+        if not feedback:
+            feedback = generate_rule_based_feedback({}, {})
+
+        overall = (feedback["rhythm"]["score"] + feedback["harmony"]["score"]
+                   + feedback["melody"]["score"] + feedback["articulation"]["score"]) / 4
+
+        analysis_results[analysis_id] = {"status": "completed", "result": {
+            "overall_score": round(overall, 1),
+            "tune": tune_name,
+            "report": report,
+            "summary": summary,
+            "used": used,
+            "facts": facts,
+            "feedback": feedback,
+            "ai_generated": ai_generated,
+        }}
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        analysis_results[analysis_id] = {"status": "error", "error": str(e)}
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+# ============================================================================
 # API ENDPOINTS
 # ============================================================================
+
+@app.get("/standards")
+async def get_standards():
+    """Liste der bekannten Standards (Anzeigenamen) fuer die UI."""
+    return {"standards": standards.list_standards()}
+
+
+@app.post("/analyze-jazz")
+async def analyze_jazz(background_tasks: BackgroundTasks,
+                       file: UploadFile = File(...),
+                       tune: str = Form(""),
+                       manual_changes: str = Form(""),
+                       beats_per_bar: int = Form(4),
+                       bpm: str = Form("")):
+    """Neuer Weg: MIDI + BEKANNTE Changes -> jazzfb-Analyse -> Apertus."""
+    if not (file.filename.endswith('.mid') or file.filename.endswith('.midi')):
+        raise HTTPException(status_code=400, detail="Aktuell nur MIDI-Dateien (.mid/.midi)")
+    analysis_id = str(uuid.uuid4())
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mid') as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+    bpm_val = None
+    try:
+        bpm_val = float(bpm) if bpm.strip() else None
+    except ValueError:
+        bpm_val = None
+    background_tasks.add_task(process_jazz_in_background, analysis_id, tmp_path,
+                             tune or None, manual_changes or None, beats_per_bar, bpm_val)
+    return {"analysis_id": analysis_id, "status": "processing"}
+
 
 @app.post("/analyze-async")
 async def analyze_midi_async(background_tasks: BackgroundTasks, file: UploadFile = File(...), key: str = Form("C Major")):
