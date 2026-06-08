@@ -26,6 +26,7 @@ import requests
 # Loest die alte blinde Harmonie-Erkennung ab: Changes sind bekannt/vorgegeben.
 import jazz_service
 import standards
+import keymode
 
 app = FastAPI(title="Jazz Feedback API - MIDI")
 
@@ -231,28 +232,30 @@ def process_midi_in_background(analysis_id: str, tmp_path: str, user_key: str):
 # NEUE ENGINE: jazzfb gegen BEKANNTE Changes (Slice 1)
 # ============================================================================
 
-async def get_apertus_feedback_grounded(facts: str, tune_name: str) -> Optional[Dict]:
+async def get_apertus_feedback_grounded(facts: str, context_label: str) -> Optional[Dict]:
     """Apertus-Feedback, das auf den regelbasierten jazzfb-Fakten fusst.
     Behaelt das bestehende Score-JSON-Format (rhythm/harmony/melody/
-    articulation), damit die UI unveraendert rendert — aber die Bewertung
-    stuetzt sich auf echte Analyse gegen bekannte Changes, nicht auf geratene
-    Harmonie."""
+    articulation), damit die UI unveraendert rendert. Die Fakten enthalten
+    bereits den Harmonie-Kontext (volle Changes / Tonart / keiner) — der
+    Prompt ist deshalb kontext-neutral gehalten."""
     if not apertus_enabled or not HF_TOKEN:
         return None
     try:
         prompt = f"""Du bist ein erfahrener Jazz-Pianist und Klavier-Lehrer. Unten steht eine
-AUTOMATISCH ERZEUGTE, REGELBASIERTE Analyse eines Solo-Klavier-Chorus ueber die
-BEKANNTEN Changes von "{tune_name}". Die Zahlen stammen aus Musiktheorie-Regeln
-gegen die vorgegebenen Changes (nicht aus geratener Harmonie) und aus einer
-moeglicherweise fehlerbehafteten Transkription — bewerte deshalb TENDENZEN und
-STATISTIK, nicht einzelne Noten.
+AUTOMATISCH ERZEUGTE, REGELBASIERTE Analyse eines Solo-Klavier-Stuecks ({context_label}).
+Die erste Zeile der Fakten nennt den Harmonie-Kontext (volle Changes, eine
+Tonart/Tonleiter, oder KEINER). Wenn kein bzw. nur Tonart-Kontext vorliegt, mach
+KEINE Aussagen ueber einzelne Akkorde — bewerte Harmonie dann zurueckhaltend bzw.
+nur auf Tonart-Ebene. Die Zahlen stammen aus Musiktheorie-Regeln und aus einer
+moeglicherweise fehlerbehafteten Transkription — bewerte TENDENZEN und STATISTIK,
+nicht einzelne Noten.
 
 ANALYSE-FAKTEN:
 {facts}
 
 Gib didaktisches, ermutigendes, musikalisch fundiertes Feedback. Bewerte (1.0-10.0)
-und begruende kurz fuer: Rhythmus/Time-Feel, Harmonie (Akkordtoene/Tensions/Avoid
-auf den Changes), Melodie/Linienfuehrung, Artikulation/Dynamik. Jede Kategorie mit
+und begruende kurz fuer: Rhythmus/Time-Feel, Harmonie (so weit der Kontext es
+hergibt), Melodie/Linienfuehrung, Artikulation/Dynamik. Jede Kategorie mit
 3 konkreten Uebe-Tipps.
 Antworte NUR als JSON:
 {{"rhythm": {{"score": 7.5, "feedback": "...", "tips": ["...","...","..."]}}, "harmony": {{"score": 8.0, "feedback": "...", "tips": ["...","...","..."]}}, "melody": {{"score": 6.5, "feedback": "...", "tips": ["...","...","..."]}}, "articulation": {{"score": 7.0, "feedback": "...", "tips": ["...","...","..."]}}}}"""
@@ -279,44 +282,31 @@ Antworte NUR als JSON:
         return None
 
 
-def _resolve_changes(tune: Optional[str], manual_changes: Optional[str]):
-    """Liefert (bars, beats_per_bar, tempo_hint, tune_name) aus Standard-Auswahl
-    oder Freitext-Changes. Freitext hat Vorrang, wenn gesetzt."""
-    if manual_changes and manual_changes.strip():
-        bars = standards.parse_manual_changes(manual_changes)
-        return bars, 4, None, "Eigene Changes"
-    std = standards.get_standard(tune) if tune else None
-    if std:
-        return std["bars"], std.get("beats_per_bar", 4), std.get("tempo_hint"), tune
-    return None, 4, None, None
-
-
 def process_jazz_in_background(analysis_id: str, tmp_path: str, tune: Optional[str],
-                               manual_changes: Optional[str], beats_per_bar: int,
+                               manual_changes: Optional[str], key_tonic: Optional[str],
+                               key_mode: Optional[str], beats_per_bar: int,
                                bpm: Optional[float]):
     import asyncio, gc
     try:
         analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
-        bars, bpb, tempo_hint, tune_name = _resolve_changes(tune, manual_changes)
-        if not bars:
-            raise Exception("Keine Changes: Standard waehlen oder eigene Changes eingeben.")
-        if beats_per_bar:
-            bpb = int(beats_per_bar)
+        # Kontext aufloesen (Changes / Tonart / keiner) — alles optional.
+        context = jazz_service.resolve_context(tune, manual_changes, key_tonic, key_mode)
 
-        res = jazz_service.analyze_midi_with_changes(
-            tmp_path, bars, beats_per_bar=bpb,
+        res = jazz_service.analyze_midi(
+            tmp_path, context,
+            beats_per_bar=(int(beats_per_bar) if beats_per_bar else None),
             bpm=(float(bpm) if bpm else None))
         if not res.get("ok"):
             raise Exception(res.get("error", "Analyse fehlgeschlagen."))
 
         report, summary, used = res["report"], res["summary"], res["used"]
-        facts = jazz_service.facts_for_llm(report, summary, tune_name or "Eigene Changes")
+        label = report.get("context", {}).get("label", "Ohne Harmonie-Kontext")
+        facts = jazz_service.facts_for_llm(report, summary, label)
         gc.collect()
 
         analysis_results[analysis_id] = {"status": "processing", "stage": "ai"}
         loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
-        feedback = loop.run_until_complete(
-            get_apertus_feedback_grounded(facts, tune_name or "Eigene Changes"))
+        feedback = loop.run_until_complete(get_apertus_feedback_grounded(facts, label))
         loop.close()
 
         ai_generated = feedback is not None
@@ -328,7 +318,7 @@ def process_jazz_in_background(analysis_id: str, tmp_path: str, tune: Optional[s
 
         analysis_results[analysis_id] = {"status": "completed", "result": {
             "overall_score": round(overall, 1),
-            "tune": tune_name,
+            "tune": label,
             "report": report,
             "summary": summary,
             "used": used,
@@ -354,27 +344,36 @@ async def get_standards():
     return {"standards": standards.list_standards()}
 
 
+@app.get("/modes")
+async def get_modes():
+    """Liste der Tonart-Modi (value/label) fuer die UI."""
+    return {"modes": keymode.list_modes()}
+
+
 @app.post("/analyze-jazz")
 async def analyze_jazz(background_tasks: BackgroundTasks,
                        file: UploadFile = File(...),
                        tune: str = Form(""),
                        manual_changes: str = Form(""),
+                       key_tonic: str = Form(""),
+                       key_mode: str = Form(""),
                        beats_per_bar: int = Form(4),
                        bpm: str = Form("")):
-    """Neuer Weg: MIDI + BEKANNTE Changes -> jazzfb-Analyse -> Apertus."""
+    """MIDI + OPTIONALER Harmonie-Kontext -> jazzfb-Analyse -> Apertus.
+    Kontext-Precedence: eigene Changes > Tune > Tonart > keiner."""
     if not (file.filename.endswith('.mid') or file.filename.endswith('.midi')):
         raise HTTPException(status_code=400, detail="Aktuell nur MIDI-Dateien (.mid/.midi)")
     analysis_id = str(uuid.uuid4())
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mid') as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
-    bpm_val = None
     try:
         bpm_val = float(bpm) if bpm.strip() else None
     except ValueError:
         bpm_val = None
     background_tasks.add_task(process_jazz_in_background, analysis_id, tmp_path,
-                             tune or None, manual_changes or None, beats_per_bar, bpm_val)
+                             tune or None, manual_changes or None,
+                             key_tonic or None, key_mode or None, beats_per_bar, bpm_val)
     return {"analysis_id": analysis_id, "status": "processing"}
 
 
