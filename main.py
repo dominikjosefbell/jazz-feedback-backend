@@ -1,7 +1,7 @@
 # Jazz Improvisation Feedback Platform - MIDI VERSION
 # With Key Selector + Rhythm Detection + Grand Staff Notation
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import numpy as np
@@ -282,56 +282,75 @@ Antworte NUR als JSON:
         return None
 
 
-def process_jazz_in_background(analysis_id: str, tmp_path: str, tune: Optional[str],
-                               manual_changes: Optional[str], key_tonic: Optional[str],
-                               key_mode: Optional[str], beats_per_bar: int,
-                               bpm: Optional[float]):
-    import asyncio, gc
+def _finish_jazz_analysis(analysis_id: str, res: dict):
+    """Gemeinsamer Abschluss fuer MIDI- und Audio/Note-Events-Pfad:
+    Fakten -> Apertus -> Score -> Ergebnis ablegen."""
+    import asyncio
+    if not res.get("ok"):
+        analysis_results[analysis_id] = {"status": "error",
+                                         "error": res.get("error", "Analyse fehlgeschlagen.")}
+        return
+    report, summary, used = res["report"], res["summary"], res["used"]
+    label = report.get("context", {}).get("label", "Ohne Harmonie-Kontext")
+    facts = jazz_service.facts_for_llm(report, summary, label)
+
+    analysis_results[analysis_id] = {"status": "processing", "stage": "ai"}
+    loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+    feedback = loop.run_until_complete(get_apertus_feedback_grounded(facts, label))
+    loop.close()
+
+    ai_generated = feedback is not None
+    if not feedback:
+        feedback = generate_rule_based_feedback({}, {})
+    overall = (feedback["rhythm"]["score"] + feedback["harmony"]["score"]
+               + feedback["melody"]["score"] + feedback["articulation"]["score"]) / 4
+
+    analysis_results[analysis_id] = {"status": "completed", "result": {
+        "overall_score": round(overall, 1),
+        "tune": label,
+        "report": report,
+        "summary": summary,
+        "used": used,
+        "facts": facts,
+        "feedback": feedback,
+        "ai_generated": ai_generated,
+    }}
+
+
+def process_midi_jazz(analysis_id: str, tmp_path: str, context: dict,
+                      beats_per_bar: int, bpm: Optional[float]):
+    import gc
     try:
         analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
-        # Kontext aufloesen (Changes / Tonart / keiner) — alles optional.
-        context = jazz_service.resolve_context(tune, manual_changes, key_tonic, key_mode)
-
         res = jazz_service.analyze_midi(
             tmp_path, context,
             beats_per_bar=(int(beats_per_bar) if beats_per_bar else None),
             bpm=(float(bpm) if bpm else None))
-        if not res.get("ok"):
-            raise Exception(res.get("error", "Analyse fehlgeschlagen."))
-
-        report, summary, used = res["report"], res["summary"], res["used"]
-        label = report.get("context", {}).get("label", "Ohne Harmonie-Kontext")
-        facts = jazz_service.facts_for_llm(report, summary, label)
         gc.collect()
-
-        analysis_results[analysis_id] = {"status": "processing", "stage": "ai"}
-        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
-        feedback = loop.run_until_complete(get_apertus_feedback_grounded(facts, label))
-        loop.close()
-
-        ai_generated = feedback is not None
-        if not feedback:
-            feedback = generate_rule_based_feedback({}, {})
-
-        overall = (feedback["rhythm"]["score"] + feedback["harmony"]["score"]
-                   + feedback["melody"]["score"] + feedback["articulation"]["score"]) / 4
-
-        analysis_results[analysis_id] = {"status": "completed", "result": {
-            "overall_score": round(overall, 1),
-            "tune": label,
-            "report": report,
-            "summary": summary,
-            "used": used,
-            "facts": facts,
-            "feedback": feedback,
-            "ai_generated": ai_generated,
-        }}
+        _finish_jazz_analysis(analysis_id, res)
     except Exception as e:
         import traceback; traceback.print_exc()
         analysis_results[analysis_id] = {"status": "error", "error": str(e)}
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+def process_notes_jazz(analysis_id: str, note_events: list, context: dict,
+                       beats_per_bar: int, bpm: Optional[float]):
+    """Pfad fuer im Browser transkribierte Audio-Aufnahmen (Basic Pitch)."""
+    import gc
+    try:
+        analysis_results[analysis_id] = {"status": "processing", "stage": "notes"}
+        res = jazz_service.analyze_notes(
+            note_events, context,
+            beats_per_bar=(int(beats_per_bar) if beats_per_bar else None),
+            bpm=(float(bpm) if bpm else None))
+        gc.collect()
+        _finish_jazz_analysis(analysis_id, res)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        analysis_results[analysis_id] = {"status": "error", "error": str(e)}
 
 
 # ============================================================================
@@ -371,9 +390,34 @@ async def analyze_jazz(background_tasks: BackgroundTasks,
         bpm_val = float(bpm) if bpm.strip() else None
     except ValueError:
         bpm_val = None
-    background_tasks.add_task(process_jazz_in_background, analysis_id, tmp_path,
-                             tune or None, manual_changes or None,
-                             key_tonic or None, key_mode or None, beats_per_bar, bpm_val)
+    context = jazz_service.resolve_context(tune or None, manual_changes or None,
+                                           key_tonic or None, key_mode or None)
+    background_tasks.add_task(process_midi_jazz, analysis_id, tmp_path,
+                             context, beats_per_bar, bpm_val)
+    return {"analysis_id": analysis_id, "status": "processing"}
+
+
+@app.post("/analyze-notes")
+async def analyze_notes_endpoint(background_tasks: BackgroundTasks, request: Request):
+    """Audio-Pfad: der Browser transkribiert mit Basic Pitch und schickt die
+    Note-Events als JSON. Body:
+      { notes: [[start_s, end_s, pitch_midi, amplitude], ...],
+        tune?, manual_changes?, key_tonic?, key_mode?, beats_per_bar?, bpm? }"""
+    body = await request.json()
+    note_events = body.get("notes") or []
+    if not note_events:
+        raise HTTPException(status_code=400, detail="Keine Note-Events uebergeben.")
+    try:
+        bpm_val = float(body["bpm"]) if str(body.get("bpm", "")).strip() else None
+    except (ValueError, TypeError):
+        bpm_val = None
+    beats_per_bar = int(body.get("beats_per_bar") or 4)
+    context = jazz_service.resolve_context(
+        body.get("tune") or None, body.get("manual_changes") or None,
+        body.get("key_tonic") or None, body.get("key_mode") or None)
+    analysis_id = str(uuid.uuid4())
+    background_tasks.add_task(process_notes_jazz, analysis_id, note_events,
+                             context, beats_per_bar, bpm_val)
     return {"analysis_id": analysis_id, "status": "processing"}
 
 

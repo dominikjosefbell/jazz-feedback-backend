@@ -20,6 +20,7 @@ from collections import Counter
 from typing import Optional
 
 from jazzfb import Note, BeatGrid, Changes, analyze, rule_based_summary, from_midi
+from jazzfb.core import from_basic_pitch
 from jazzfb.separation import separate
 from jazzfb.analysis import analyze_time_feel, analyze_contour, analyze_voice_leading
 from jazzfb.theory import pc_name
@@ -135,6 +136,21 @@ def _comp_in_scale_ratio(clusters, tonic_pc: int, mode: str) -> Optional[float]:
 
 # --- Haupt-Dispatcher -------------------------------------------------------
 
+def _notes_view(sep) -> list[dict]:
+    """Flache Notenliste fuer die Piano-Roll-Darstellung (Transparenz/Pruefung).
+    voice = 'line' (Melodie) oder 'comp' (Begleit-Voicing) — zeigt zugleich,
+    wie die Rollen-Trennung entschieden hat."""
+    out = []
+    for n in sep.line:
+        out.append({"on": round(n.onset, 3), "off": round(n.offset, 3),
+                    "p": n.pitch, "voice": "line"})
+    for c in sep.clusters:
+        for n in c.notes:
+            out.append({"on": round(n.onset, 3), "off": round(n.offset, 3),
+                        "p": n.pitch, "voice": "comp"})
+    return sorted(out, key=lambda x: (x["on"], x["p"]))
+
+
 def analyze_recording(notes: list[Note], grid: BeatGrid, context: dict) -> dict:
     kind = context.get("kind", "none")
     sep = separate(notes)
@@ -143,42 +159,50 @@ def analyze_recording(notes: list[Note], grid: BeatGrid, context: dict) -> dict:
         changes = Changes.from_bars(context["bars"], beats_per_bar=grid.beats_per_bar)
         report = analyze(notes, grid, changes)        # volle, bewaehrte Analyse
         report["context"] = {"kind": "changes", "label": context.get("label", "Changes")}
-        return report
-
-    meta = {
-        "n_notes": len(notes), "bpm": grid.bpm,
-        "beats_per_bar": grid.beats_per_bar,
-        "line_role": sep.line_role, "comp_role": sep.comp_role,
-        "n_line_notes": len(sep.line), "n_clusters": len(sep.clusters),
-    }
-    report = {
-        "meta": meta,
-        "voicings": {"n_voicings": 0,
-                     "comp_clusters": len([c for c in sep.clusters if len(c.pitches) >= 3])},
-        "voice_leading": _voice_leading_from_clusters(sep.clusters),
-        "time_feel": analyze_time_feel(sep.line, grid),
-        "contour": analyze_contour(notes, grid),
-    }
-
-    if kind == "key":
-        tonic_pc = context.get("tonic_pc")
-        mode = context["mode"]
-        tonic_known = context.get("tonic_known", tonic_pc is not None)
-        if tonic_pc is None:
-            pcs = Counter(n.pc for n in sep.line) or Counter(n.pc for n in notes)
-            tonic_pc = keymode.infer_tonic(pcs, mode)
-        report["line"] = _line_against_scale(sep.line, grid, tonic_pc, mode)
-        report["voicings"]["comp_in_scale_ratio"] = _comp_in_scale_ratio(
-            sep.clusters, tonic_pc, mode)
-        report["context"] = {
-            "kind": "key", "label": keymode.key_label(tonic_pc, mode),
-            "tonic": pc_name(tonic_pc), "mode": mode, "tonic_known": tonic_known,
+        report["changes_view"] = [
+            {"bar": s.bar, "beat": round(s.beat, 2), "beats": s.beats, "symbol": s.symbol}
+            for s in changes.spans]
+    else:
+        meta = {
+            "n_notes": len(notes), "bpm": grid.bpm,
+            "beats_per_bar": grid.beats_per_bar,
+            "line_role": sep.line_role, "comp_role": sep.comp_role,
+            "n_line_notes": len(sep.line), "n_clusters": len(sep.clusters),
         }
-        return report
+        report = {
+            "meta": meta,
+            "voicings": {"n_voicings": 0,
+                         "comp_clusters": len([c for c in sep.clusters if len(c.pitches) >= 3])},
+            "voice_leading": _voice_leading_from_clusters(sep.clusters),
+            "time_feel": analyze_time_feel(sep.line, grid),
+            "contour": analyze_contour(notes, grid),
+        }
+        if kind == "key":
+            tonic_pc = context.get("tonic_pc")
+            mode = context["mode"]
+            tonic_known = context.get("tonic_known", tonic_pc is not None)
+            if tonic_pc is None:
+                pcs = Counter(n.pc for n in sep.line) or Counter(n.pc for n in notes)
+                tonic_pc = keymode.infer_tonic(pcs, mode)
+            report["line"] = _line_against_scale(sep.line, grid, tonic_pc, mode)
+            report["voicings"]["comp_in_scale_ratio"] = _comp_in_scale_ratio(
+                sep.clusters, tonic_pc, mode)
+            report["context"] = {
+                "kind": "key", "label": keymode.key_label(tonic_pc, mode),
+                "tonic": pc_name(tonic_pc), "mode": mode, "tonic_known": tonic_known,
+            }
+        else:  # kind == "none"
+            report["line"] = _line_no_harmony(sep.line)
+            report["context"] = {"kind": "none", "label": "Ohne Harmonie-Kontext"}
 
-    # kind == "none"
-    report["line"] = _line_no_harmony(sep.line)
-    report["context"] = {"kind": "none", "label": "Ohne Harmonie-Kontext"}
+    # Gemeinsam: Raster + Notenliste fuer die Piano-Roll.
+    report["grid"] = {
+        "bpm": grid.bpm, "downbeat": round(grid.start, 3),
+        "beats_per_bar": grid.beats_per_bar,
+        "t_start": round(min((n.onset for n in notes), default=0.0), 3),
+        "t_end": round(max((n.offset for n in notes), default=0.0), 3),
+    }
+    report["notes_view"] = _notes_view(sep)
     return report
 
 
@@ -204,6 +228,35 @@ def analyze_midi(midi_path: str, context: dict,
         "used": {"bpm": round(float(bpm), 1), "downbeat": round(float(downbeat), 3),
                  "beats_per_bar": bpb, "n_notes": len(notes),
                  "context": report.get("context", {})},
+    }
+
+
+def analyze_notes(note_events, context: dict,
+                  beats_per_bar: Optional[int] = None,
+                  bpm: Optional[float] = None,
+                  downbeat: Optional[float] = None) -> dict:
+    """Analyse aus rohen Note-Events (z.B. Spotify Basic Pitch im Browser).
+    note_events: Liste von [start_s, end_s, pitch_midi, amplitude]."""
+    notes = from_basic_pitch(note_events)
+    if not notes:
+        return {"ok": False, "error": "Keine Noten in der Transkription."}
+    # Audio liefert kein Tempo -> Vorgabe/Standard. Genaues bpm/downbeat ist hier
+    # besonders wichtig (siehe Hinweis in der UI).
+    if bpm is None:
+        bpm = context.get("tempo_hint") or 120.0
+    if downbeat is None:
+        downbeat = min(n.onset for n in notes)
+    bpb = int(beats_per_bar or context.get("beats_per_bar", 4))
+    grid = BeatGrid(bpm=float(bpm), start=float(downbeat), beats_per_bar=bpb)
+
+    report = analyze_recording(notes, grid, context)
+    return {
+        "ok": True,
+        "report": report,
+        "summary": summarize(report),
+        "used": {"bpm": round(float(bpm), 1), "downbeat": round(float(downbeat), 3),
+                 "beats_per_bar": bpb, "n_notes": len(notes),
+                 "source": "audio", "context": report.get("context", {})},
     }
 
 
